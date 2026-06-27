@@ -1,0 +1,22 @@
+# Reverse proxy SyncFlix — fusionne HTTP (Laravel) et WebSocket (Reverb) sur un seul port,
+# pour n'exposer qu'UN tunnel ngrok. (Voir ARCHITECTURE.md.)
+#
+# Lancement : caddy run   (depuis server/)
+# Topologie  : ngrok http 8088  →  Caddy :8088  ┬─ /app/*  → Reverb  127.0.0.1:8080  (WebSocket)
+#                                               └─ reste   → Laravel 127.0.0.1:8000  (API + vidéo)
+#
+# TLS : inutile ici — ngrok termine le HTTPS/WSS à sa frontière et transmet du HTTP clair à Caddy.
+
+{
+	# Pas de HTTPS automatique : on sert en HTTP clair derrière ngrok.
+	auto_https off
+}
+
+:8088 {
+	# Connexions WebSocket Reverb : le client Pusher se connecte sur /app/{clé}.
+	@reverb path /app/*
+	reverse_proxy @reverb 127.0.0.1:8080
+
+	# Tout le reste → Laravel (API REST + streaming vidéo avec Range).
+	reverse_proxy 127.0.0.1:8000
+}

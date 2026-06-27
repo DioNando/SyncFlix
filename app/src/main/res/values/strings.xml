@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SyncFlix</string>
+    <string name="app_tagline">Regardez ensemble, à distance</string>
+
+    <!-- Commun -->
+    <string name="common_or">ou</string>
+
+    <!-- Appairage -->
+    <string name="pairing_server_label">Adresse du serveur</string>
+    <string name="pairing_server_hint">https://mon-pc.expose.dev</string>
+    <string name="pairing_code_label">Code de session</string>
+    <string name="pairing_code_hint">ABC123</string>
+    <string name="pairing_create">Créer une session</string>
+    <string name="pairing_join">Rejoindre la session</string>
+    <string name="pairing_error_server">Renseigne l\'adresse du serveur.</string>
+    <string name="pairing_error_code">Saisis un code de session.</string>
+    <string name="pairing_error_not_found">Session introuvable. Vérifie le code.</string>
+    <string name="pairing_error_network">Connexion au serveur impossible. Vérifie l\'adresse et le tunnel.</string>
+    <string name="pairing_code_ready_title">Voici ton code</string>
+    <string name="pairing_code_ready_hint">Partage-le avec l\'autre personne pour regarder ensemble.</string>
+    <string name="pairing_copy">Copier le code</string>
+    <string name="pairing_copied">Code copié ✓</string>
+    <string name="pairing_start">Commencer à regarder</string>
+
+    <!-- Lecteur -->
+    <string name="player_session_code">Session %1$s</string>
+    <string name="player_connecting">Connexion…</string>
+    <string name="player_buffering">Chargement…</string>
+    <string name="player_synced">Synchronisé</string>
+
+    <!-- Descriptions d\'accessibilité (TalkBack) -->
+    <string name="cd_back">Retour</string>
+    <string name="cd_play">Lecture</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_seek_back">Reculer de 10 secondes</string>
+    <string name="cd_seek_forward">Avancer de 10 secondes</string>
+    <string name="cd_logo">Logo SyncFlix</string>
+</resources>
