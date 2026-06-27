@@ -29,6 +29,10 @@ class SessionApi(
     suspend fun join(serverUrl: String, code: String): SessionState =
         post(serverUrl, "/api/sessions/${code.trim().uppercase()}/join", body = "{}")
 
+    /** Récupère l'état courant de la session (resync à la (re)connexion du WebSocket). */
+    suspend fun getState(serverUrl: String, code: String): SessionState =
+        get(serverUrl, "/api/sessions/${code.trim().uppercase()}/state")
+
     /**
      * Pousse une intention de lecture (Play/Pause/Seek). Le serveur incrémente `seq`, persiste et
      * diffuse l'état sur le canal. [triggeredBy] = id du téléphone émetteur (anti-boucle).
@@ -49,23 +53,31 @@ class SessionApi(
     }
 
     private suspend fun post(serverUrl: String, path: String, body: String): SessionState =
-        withContext(Dispatchers.IO) {
-            val base = serverUrl.trim().trimEnd('/')
-            val request = Request.Builder()
-                .url("$base$path")
-                .post(body.toRequestBody(JSON))
-                .header("Accept", "application/json")
-                .header("ngrok-skip-browser-warning", "true")
-                .build()
+        execute(serverUrl, Request.Builder().post(body.toRequestBody(JSON)), path)
 
-            client.newCall(request).execute().use { response ->
-                val raw = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    throw SessionException(response.code, raw)
-                }
-                parse(serverUrl, raw)
+    private suspend fun get(serverUrl: String, path: String): SessionState =
+        execute(serverUrl, Request.Builder().get(), path)
+
+    private suspend fun execute(
+        serverUrl: String,
+        builder: Request.Builder,
+        path: String,
+    ): SessionState = withContext(Dispatchers.IO) {
+        val base = serverUrl.trim().trimEnd('/')
+        val request = builder
+            .url("$base$path")
+            .header("Accept", "application/json")
+            .header("ngrok-skip-browser-warning", "true")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw SessionException(response.code, raw)
             }
+            parse(serverUrl, raw)
         }
+    }
 
     private fun parse(serverUrl: String, raw: String): SessionState {
         val json = JSONObject(raw)

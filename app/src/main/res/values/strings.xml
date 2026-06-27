@@ -28,6 +28,9 @@
     <string name="player_connecting">Connexion…</string>
     <string name="player_buffering">Chargement…</string>
     <string name="player_synced">Synchronisé</string>
+    <string name="player_offline">Hors ligne</string>
+    <string name="player_remote_play">L\'autre a lancé la lecture</string>
+    <string name="player_remote_pause">L\'autre a mis en pause</string>
 
     <!-- Descriptions d\'accessibilité (TalkBack) -->
     <string name="cd_back">Retour</string>

@@ -3,6 +3,7 @@ package com.syncflix.app.ui.pairing
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -47,6 +51,7 @@ import com.syncflix.app.R
 import com.syncflix.app.data.model.SessionState
 import com.syncflix.app.data.remote.SessionApi
 import com.syncflix.app.data.remote.SessionException
+import com.syncflix.app.ui.components.ActionCard
 import com.syncflix.app.ui.components.SyncFlixFieldShape
 import com.syncflix.app.ui.components.syncflixFieldColors
 import kotlinx.coroutines.launch
@@ -141,22 +146,27 @@ fun PairingScreen(
 
             Spacer(Modifier.height(40.dp))
 
-            val pending = created
-            if (pending != null) {
-                CodeReadyPanel(code = pending.code, onStart = { onConnect(pending) })
-            } else {
-                PairingForm(
-                    server = server,
-                    code = code,
-                    serverError = serverError,
-                    codeError = codeError,
-                    loading = loading,
-                    errorRes = errorRes,
-                    onServerChange = { server = it; serverError = false },
-                    onCodeChange = { code = it; codeError = false },
-                    onJoin = ::join,
-                    onCreate = ::create,
-                )
+            // Transition douce formulaire ↔ panneau du code (après création de session).
+            Crossfade(targetState = created, label = "pairing-content") { pending ->
+                // Column requise : Crossfade place le contenu dans une Box (sinon empilement).
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (pending != null) {
+                        CodeReadyPanel(code = pending.code, onStart = { onConnect(pending) })
+                    } else {
+                        PairingForm(
+                            server = server,
+                            code = code,
+                            serverError = serverError,
+                            codeError = codeError,
+                            loading = loading,
+                            errorRes = errorRes,
+                            onServerChange = { server = it; serverError = false },
+                            onCodeChange = { code = it; codeError = false },
+                            onJoin = ::join,
+                            onCreate = ::create,
+                        )
+                    }
+                }
             }
         }
     }
@@ -228,21 +238,21 @@ private fun PairingForm(
     if (loading) {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     } else {
-        Button(
+        ActionCard(
+            icon = Icons.Rounded.PlayArrow,
+            label = stringResource(R.string.pairing_join),
+            accent = MaterialTheme.colorScheme.primary,
             onClick = onJoin,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(stringResource(R.string.pairing_join))
-        }
+        )
 
         Spacer(Modifier.height(12.dp))
 
-        FilledTonalButton(
+        ActionCard(
+            icon = Icons.Rounded.Add,
+            label = stringResource(R.string.pairing_create),
+            accent = MaterialTheme.colorScheme.secondary,
             onClick = onCreate,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(stringResource(R.string.pairing_create))
-        }
+        )
     }
 }
 
@@ -291,23 +301,23 @@ private fun CodeReadyPanel(
 
     Spacer(Modifier.height(16.dp))
 
-    FilledTonalButton(
+    ActionCard(
+        icon = if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
+        label = stringResource(if (copied) R.string.pairing_copied else R.string.pairing_copy),
+        accent = MaterialTheme.colorScheme.secondary,
         onClick = {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("SyncFlix", code))
             copied = true
         },
-        modifier = Modifier.fillMaxWidth().height(52.dp),
-    ) {
-        Text(stringResource(if (copied) R.string.pairing_copied else R.string.pairing_copy))
-    }
+    )
 
     Spacer(Modifier.height(12.dp))
 
-    Button(
+    ActionCard(
+        icon = Icons.Rounded.PlayArrow,
+        label = stringResource(R.string.pairing_start),
+        accent = MaterialTheme.colorScheme.primary,
         onClick = onStart,
-        modifier = Modifier.fillMaxWidth().height(52.dp),
-    ) {
-        Text(stringResource(R.string.pairing_start))
-    }
+    )
 }

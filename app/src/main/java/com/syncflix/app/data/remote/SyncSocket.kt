@@ -1,6 +1,9 @@
 package com.syncflix.app.data.remote
 
 import com.syncflix.app.data.model.VideoState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -11,8 +14,12 @@ import org.json.JSONObject
 /**
  * Client WebSocket de synchro, parlant le **protocole Pusher** (implémenté par Laravel Reverb).
  *
- * Cycle : connexion → `pusher:connection_established` → on s'abonne au canal public → on reçoit les
+ * Cycle : connexion → `pusher:connection_established` → abonnement au canal public → réception des
  * événements `VideoStateUpdated`. Répond aux `pusher:ping` par un `pusher:pong` (keep-alive applicatif).
+ *
+ * **Reconnexion automatique** : à toute coupure non volontaire (échec/fermeture), retente après un
+ * court délai tant que la session est active. À chaque réabonnement, l'appelant resynchronise via
+ * `getState` (l'état a pu changer pendant la coupure).
  *
  * Volontairement minimal (OkHttp + `org.json`, pas de SDK Pusher). Pas d'auth : canal **public**
  * `movie-session.{code}` (le code fait office de secret — cf. ARCHITECTURE.md).
@@ -20,6 +27,7 @@ import org.json.JSONObject
 class SyncSocket(
     private val wsUrl: String,       // ex. wss://xxxx.ngrok-free.app/app/{clé}
     private val channel: String,     // ex. movie-session.ABC123
+    private val scope: CoroutineScope,
     private val client: OkHttpClient = OkHttpClient(),
 ) {
     /** Événements remontés à l'UI / au gestionnaire de synchro. */
@@ -27,13 +35,17 @@ class SyncSocket(
         data object Connected : Event       // socket établi (avant abonnement)
         data object Subscribed : Event      // abonné au canal, prêt à recevoir
         data class State(val state: VideoState) : Event
-        data class Failure(val message: String) : Event
-        data object Closed : Event
+        data object Disconnected : Event    // coupure (une reconnexion est planifiée)
     }
 
     private var socket: WebSocket? = null
+    private var closedByUser = false
 
     fun connect(onEvent: (Event) -> Unit) {
+        open(onEvent)
+    }
+
+    private fun open(onEvent: (Event) -> Unit) {
         val request = Request.Builder()
             .url(wsUrl)
             .header("ngrok-skip-browser-warning", "true")
@@ -45,17 +57,27 @@ class SyncSocket(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                onEvent(Event.Failure(t.message ?: "WebSocket error"))
+                scheduleReconnect(onEvent)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                onEvent(Event.Closed)
+                scheduleReconnect(onEvent)
             }
         })
     }
 
-    /** Ferme proprement la connexion (1000 = normal closure). */
+    private fun scheduleReconnect(onEvent: (Event) -> Unit) {
+        if (closedByUser) return
+        onEvent(Event.Disconnected)
+        scope.launch {
+            delay(RECONNECT_DELAY_MS)
+            if (!closedByUser) open(onEvent)
+        }
+    }
+
+    /** Ferme proprement la connexion (1000 = normal closure) et stoppe la reconnexion. */
     fun close() {
+        closedByUser = true
         socket?.close(1000, null)
         socket = null
     }
@@ -64,7 +86,6 @@ class SyncSocket(
         val message = JSONObject(text)
         when (message.optString("event")) {
             "pusher:connection_established" -> {
-                // Abonnement au canal public (data = { channel }).
                 val subscribe = JSONObject().apply {
                     put("event", "pusher:subscribe")
                     put("data", JSONObject().put("channel", channel))
@@ -75,10 +96,7 @@ class SyncSocket(
 
             "pusher_internal:subscription_succeeded" -> onEvent(Event.Subscribed)
 
-            // Keep-alive applicatif Pusher : on répond au ping par un pong.
             "pusher:ping" -> webSocket.send(JSONObject().put("event", "pusher:pong").toString())
-
-            "pusher:error" -> onEvent(Event.Failure(message.optString("data")))
 
             "VideoStateUpdated" -> {
                 // `data` est une chaîne JSON encodée (convention Pusher).
@@ -96,5 +114,9 @@ class SyncSocket(
                 )
             }
         }
+    }
+
+    companion object {
+        private const val RECONNECT_DELAY_MS = 2000L
     }
 }

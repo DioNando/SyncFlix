@@ -34,6 +34,7 @@ class PlaybackSyncManager(
     private val scope: CoroutineScope,
     private val clockOffset: () -> Long,
     private val onEmit: suspend (isPlaying: Boolean, positionMs: Long) -> Unit,
+    private val onRemoteApplied: (VideoState) -> Unit = {},
 ) {
     private var lastAppliedSeq = -1L
     private var lastRemote: VideoState? = null
@@ -78,8 +79,12 @@ class PlaybackSyncManager(
         syncJob = null
     }
 
-    /** Cale le lecteur sur l'état initial de la session (au moment du join/create). */
-    fun seed(state: VideoState) = applyRemote(state)
+    /** Cale le lecteur sur l'état initial de la session (sans retour visuel : ce n'est pas l'autre). */
+    fun seed(state: VideoState) {
+        lastAppliedSeq = state.seq
+        lastRemote = state
+        reconcile(state)
+    }
 
     /** Applique un état reçu du canal : filtre l'écho et le désordre, puis réconcilie. */
     fun applyRemote(state: VideoState) {
@@ -91,6 +96,7 @@ class PlaybackSyncManager(
         lastAppliedSeq = state.seq
         lastRemote = state
         reconcile(state)
+        onRemoteApplied(state)  // retour visuel : action déclenchée par l'autre personne
     }
 
     private fun maybeEmit() {

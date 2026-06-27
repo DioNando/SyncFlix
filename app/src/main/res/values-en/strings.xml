@@ -28,6 +28,9 @@
     <string name="player_connecting">Connecting…</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_synced">In sync</string>
+    <string name="player_offline">Offline</string>
+    <string name="player_remote_play">The other person resumed</string>
+    <string name="player_remote_pause">The other person paused</string>
 
     <!-- Accessibility descriptions (TalkBack) -->
     <string name="cd_back">Back</string>

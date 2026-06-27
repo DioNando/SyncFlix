@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +70,18 @@ private const val USE_TEST_STREAM = false
 private const val TEST_STREAM_URL =
     "https://media.w3.org/2010/05/sintel/trailer.mp4"
 
+/** État de la connexion temps réel, affiché discrètement dans le bandeau du lecteur. */
+private enum class SyncStatus { Connecting, Synced, Offline }
+
+/** Convertit l'état de session (REST) en état de lecture (pour caler/resynchroniser le lecteur). */
+private fun SessionState.asVideoState() = VideoState(
+    isPlaying = isPlaying,
+    positionMs = positionMs,
+    seq = seq,
+    serverTimestampMs = serverTimestampMs,
+    triggeredBy = null,
+)
+
 /**
  * Écran de lecture vidéo, synchronisé entre les deux téléphones.
  *
@@ -96,7 +110,9 @@ fun PlayerScreen(
     // --- Synchro temps réel (étapes 3-4) ----------------------------------------------------------
     val scope = rememberCoroutineScope()
     val sessionApi = remember { SessionApi() }
-    var subscribed by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf(SyncStatus.Connecting) }
+    // Action distante récente (l'autre a joué/mis en pause) : affichée brièvement puis effacée.
+    var remoteHint by remember { mutableStateOf<VideoState?>(null) }
     // Identité de ce téléphone pour la session : sert à ignorer son propre écho (anti-boucle).
     val clientId = remember { UUID.randomUUID().toString() }
     // Offset d'horloge mobile↔serveur, mesuré en HTTP au démarrage (0 en attendant).
@@ -161,7 +177,15 @@ fun PlayerScreen(
             onEmit = { playing, pos ->
                 sessionApi.updateState(session.serverUrl, session.code, playing, pos, clientId)
             },
+            onRemoteApplied = { remoteHint = it },
         )
+    }
+    // Efface le retour visuel d'action distante après un court instant.
+    LaunchedEffect(remoteHint) {
+        if (remoteHint != null) {
+            kotlinx.coroutines.delay(2500)
+            remoteHint = null
+        }
     }
     DisposableEffect(syncManager) {
         syncManager.start()
@@ -194,15 +218,24 @@ fun PlayerScreen(
         val socket = SyncSocket(
             wsUrl = "$wsBase/app/$REVERB_APP_KEY?protocol=7&client=android&version=1.0",
             channel = "movie-session.${session.code}",
+            scope = scope,
         )
         socket.connect { event ->
             // Les callbacks OkHttp arrivent hors du thread UI → on repasse sur le scope (Main).
             scope.launch {
                 when (event) {
-                    SyncSocket.Event.Subscribed -> subscribed = true
+                    SyncSocket.Event.Connected -> status = SyncStatus.Connecting
+                    SyncSocket.Event.Subscribed -> {
+                        status = SyncStatus.Synced
+                        // Resync : l'état a pu changer avant l'abonnement (entrée ou reconnexion).
+                        runCatching {
+                            syncManager.applyRemote(
+                                sessionApi.getState(session.serverUrl, session.code).asVideoState(),
+                            )
+                        }
+                    }
                     is SyncSocket.Event.State -> syncManager.applyRemote(event.state)
-                    SyncSocket.Event.Closed, is SyncSocket.Event.Failure -> subscribed = false
-                    SyncSocket.Event.Connected -> Unit
+                    SyncSocket.Event.Disconnected -> status = SyncStatus.Offline
                 }
             }
         }
@@ -292,25 +325,61 @@ fun PlayerScreen(
                         tint = Color.White,
                     )
                 }
-                Text(
-                    text = stringResource(R.string.player_session_code, session.code),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
+                Column(modifier = Modifier.padding(start = 4.dp)) {
+                    Text(
+                        text = session.movieTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                    )
+                    Text(
+                        text = stringResource(R.string.player_session_code, session.code),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
                 Spacer(Modifier.weight(1f))
-                // Pastille d'état : vert = abonné au canal, ambre = connexion en cours.
+                // État de connexion temps réel.
+                val (statusRes, statusColor) = when (status) {
+                    SyncStatus.Synced -> R.string.player_synced to MaterialTheme.colorScheme.primary
+                    SyncStatus.Connecting -> R.string.player_connecting to Color.White.copy(alpha = 0.7f)
+                    SyncStatus.Offline -> R.string.player_offline to MaterialTheme.colorScheme.error
+                }
                 Text(
-                    text = stringResource(
-                        if (subscribed) R.string.player_synced else R.string.player_connecting,
-                    ),
+                    text = stringResource(statusRes),
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (subscribed) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        Color.White.copy(alpha = 0.7f)
-                    },
+                    color = statusColor,
                 )
+            }
+        }
+
+        // Retour visuel transitoire : action déclenchée par l'autre personne (play/pause).
+        remoteHint?.let { hint ->
+            Surface(
+                color = Color.Black.copy(alpha = 0.55f),
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 64.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = if (hint.isPlaying) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(
+                            if (hint.isPlaying) R.string.player_remote_play else R.string.player_remote_pause,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                    )
+                }
             }
         }
     }
