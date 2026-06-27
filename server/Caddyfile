@@ -1,9 +1,15 @@
-# Reverse proxy SyncFlix — fusionne HTTP (Laravel) et WebSocket (Reverb) sur un seul port,
-# pour n'exposer qu'UN tunnel ngrok. (Voir ARCHITECTURE.md.)
+# Reverse proxy SyncFlix — fusionne HTTP (Laravel), WebSocket (Reverb) et streaming vidéo
+# sur un seul port, pour n'exposer qu'UN tunnel ngrok. (Voir ARCHITECTURE.md.)
 #
 # Lancement : caddy run   (depuis server/)
-# Topologie  : ngrok http 8088  →  Caddy :8088  ┬─ /app/*  → Reverb  127.0.0.1:8080  (WebSocket)
-#                                               └─ reste   → Laravel 127.0.0.1:8000  (API + vidéo)
+# Topologie  : ngrok http 8088  →  Caddy :8088  ┬─ /media/* → fichiers vidéo (file_server, Range natif)
+#                                               ├─ /app/*   → Reverb  127.0.0.1:8080  (WebSocket)
+#                                               └─ reste    → Laravel 127.0.0.1:8000  (API REST)
+#
+# Pourquoi /media/* en file_server : `php artisan serve` est mono-thread ; faire transiter un gros
+# fichier (.mkv de plusieurs Go) par PHP bloque l'unique worker et empêche un 2e spectateur de
+# rejoindre (join/auth WS en attente derrière le flux). Caddy sert le fichier nativement, en
+# parallèle et avec gestion du Range, laissant PHP libre pour l'API.
 #
 # TLS : inutile ici — ngrok termine le HTTPS/WSS à sa frontière et transmet du HTTP clair à Caddy.
 
@@ -13,10 +19,20 @@
 }
 
 :8088 {
-	# Connexions WebSocket Reverb : le client Pusher se connecte sur /app/{clé}.
-	@reverb path /app/*
-	reverse_proxy @reverb 127.0.0.1:8080
+	# Streaming vidéo : sert directement les fichiers de storage/app/private/movies (Range natif,
+	# multi-thread). `handle_path` retire le préfixe /media → /media/sintel.mp4 = movies/sintel.mp4.
+	handle_path /media/* {
+		root * storage/app/private/movies
+		file_server
+	}
 
-	# Tout le reste → Laravel (API REST + streaming vidéo avec Range).
-	reverse_proxy 127.0.0.1:8000
+	# Connexions WebSocket Reverb : le client Pusher se connecte sur /app/{clé}.
+	handle /app/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# Tout le reste → Laravel (API REST + sous-titres).
+	handle {
+		reverse_proxy 127.0.0.1:8000
+	}
 }

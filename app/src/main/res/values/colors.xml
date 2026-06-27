@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Fond de l'icône adaptative : noir cinéma (le logo corail ressort dessus). -->
-    <color name="ic_launcher_background">#0E0B10</color>
+    <!-- Le fond de l'icône adaptative est désormais un dégradé : @drawable/ic_launcher_background. -->
 </resources>

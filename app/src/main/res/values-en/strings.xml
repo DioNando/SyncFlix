@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SyncFlix</string>
+    <string name="app_name">Miray</string>
     <string name="app_tagline">Watch together, apart</string>
 
     <!-- Common -->
@@ -10,18 +10,25 @@
     <string name="pairing_server_label">Server address</string>
     <string name="pairing_server_hint">https://my-pc.expose.dev</string>
     <string name="pairing_code_label">Session code</string>
-    <string name="pairing_code_hint">ABC123</string>
     <string name="pairing_create">Create a session</string>
     <string name="pairing_join">Join session</string>
     <string name="pairing_error_server">Enter the server address.</string>
     <string name="pairing_error_code">Enter a session code.</string>
     <string name="pairing_error_not_found">Session not found. Check the code.</string>
     <string name="pairing_error_network">Can\'t reach the server. Check the address and tunnel.</string>
-    <string name="pairing_code_ready_title">Here\'s your code</string>
-    <string name="pairing_code_ready_hint">Share it with the other person to watch together.</string>
     <string name="pairing_copy">Copy code</string>
     <string name="pairing_copied">Code copied ✓</string>
-    <string name="pairing_start">Start watching</string>
+
+    <!-- Movie picker -->
+    <string name="movie_picker_title">Choose a movie</string>
+    <string name="movie_picker_empty">No movies in the library. Drop files on the server then run \"movies:scan\".</string>
+    <string name="movie_picker_error">Couldn\'t load movies. Check the server address.</string>
+
+    <!-- Waiting room -->
+    <string name="lobby_title">Waiting room</string>
+    <string name="lobby_hint">Share this code with the other person to watch together.</string>
+    <string name="lobby_waiting">Waiting for your partner… (%1$d/2)</string>
+    <string name="lobby_enter_alone">Enter alone</string>
 
     <!-- Player -->
     <string name="player_session_code">Session %1$s</string>
@@ -38,5 +45,6 @@
     <string name="cd_pause">Pause</string>
     <string name="cd_seek_back">Rewind 10 seconds</string>
     <string name="cd_seek_forward">Forward 10 seconds</string>
-    <string name="cd_logo">SyncFlix logo</string>
+    <string name="cd_logo">Miray logo</string>
+    <string name="cd_react">Send reaction %1$s</string>
 </resources>

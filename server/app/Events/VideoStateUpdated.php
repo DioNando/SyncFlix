@@ -3,8 +3,8 @@
 namespace App\Events;
 
 use App\Models\WatchSession;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -14,9 +14,10 @@ use Illuminate\Queue\SerializesModels;
  *
  * `ShouldBroadcastNow` → diffusion **synchrone** (pas besoin d'un worker de queue en dev).
  *
- * Canal **public** `movie-session.{code}` : l'app n'a pas de comptes, le code court fait office de
- * secret d'appairage. L'anti-boucle se fait côté client via `triggered_by` (cf. ARCHITECTURE.md).
- * Durcissement possible plus tard : canal privé + auth par code.
+ * Canal de **présence** `presence-movie-session.{code}` : l'abonnement exige une signature délivrée
+ * par `POST /api/broadcasting/auth` (ne signe que si le code de session existe), et le canal sert
+ * aussi à compter les spectateurs connectés (gate du salon d'attente) + porte les réactions emoji.
+ * L'anti-boucle se fait côté client via `triggered_by`.
  */
 class VideoStateUpdated implements ShouldBroadcastNow
 {
@@ -32,9 +33,10 @@ class VideoStateUpdated implements ShouldBroadcastNow
         $this->serverTimestampMs = $serverTimestampMs ?? (int) (microtime(true) * 1000);
     }
 
-    public function broadcastOn(): Channel
+    public function broadcastOn(): PresenceChannel
     {
-        return new Channel("movie-session.{$this->session->code}");
+        // PresenceChannel préfixe automatiquement `presence-` → `presence-movie-session.{code}`.
+        return new PresenceChannel("movie-session.{$this->session->code}");
     }
 
     /** Nom d'événement lisible côté client (sinon Laravel diffuse le FQCN). */

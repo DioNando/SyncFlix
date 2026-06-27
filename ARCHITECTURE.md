@@ -16,13 +16,23 @@ Document de conception technique. Complète le [README.md](README.md) (vision & 
 
 ## 📡 Contrat WebSocket (affiné)
 
-> 🔧 **Choix MVP : canal _public_** `movie-session.{code}` (pas `private-`). L'app n'ayant pas de
-> comptes, l'auth d'un canal privé (`/broadcasting/auth`) est lourde côté mobile ; le code court fait
-> office de secret et l'anti-boucle passe par `triggered_by`. Durcissement (canal privé + auth par
-> code) reporté. Exposition : **reverse proxy Caddy** (`server/Caddyfile`, :8088) qui route `/app/*`
-> vers Reverb et le reste vers Laravel → un seul tunnel ngrok, une seule URL côté app.
+> 🔒 **Canal de _présence_** `presence-movie-session.{code}`. L'app n'ayant pas de comptes, on
+> n'utilise pas l'auth web/cookie de Laravel : `POST /api/broadcasting/auth`
+> (`SessionController@authChannel`) signe l'abonnement (HMAC-SHA256 `socket_id:channel:channel_data`
+> avec le secret Reverb) **uniquement si le code de session existe**, et renvoie un `channel_data`
+> anonyme (`user_id` = identité opaque du client). Le secret reste côté serveur ; le code court reste
+> le secret d'accès ; l'anti-boucle passe par `triggered_by`. **Un seul canal** porte l'état de
+> lecture (`VideoStateUpdated`), le **compteur de spectateurs** (salon d'attente : `member_added` /
+> `member_removed`) et les **réactions** (`ReactionSent`). Exposition : **reverse proxy Caddy**
+> (`server/Caddyfile`, :8088) → `/media/*` servi en **file_server** (vidéos, Range natif, multi-thread),
+> `/app/*` vers Reverb, le reste vers Laravel (un seul tunnel ngrok).
+>
+> ⚠️ **Streaming hors PHP** : `php artisan serve` est mono-thread ; faire transiter un gros `.mkv`
+> par PHP bloque l'unique worker et empêche un 2e spectateur de **rejoindre** (join/auth en attente
+> derrière le flux). Les vidéos passent donc par Caddy (`/media/{stream_path}`), pas par la route PHP
+> `/api/movies/{id}/stream` (gardée en repli). Les sous-titres (petits) restent sur PHP.
 
-**Canal :** `movie-session.{code}` (public au stade MVP ; cf. note ci-dessus)
+**Canal :** `presence-movie-session.{code}` (présence ; auth via `POST /api/broadcasting/auth`)
 
 ```json
 {
@@ -114,8 +124,9 @@ app/Http/Controllers/
                          GET  /api/sessions/{code}/state      état courant (resync à la reconnexion)
                          POST /api/sessions/{code}/state      reçoit l'intention → maj DB → broadcast
 app/Events/
-  VideoStateUpdated      ShouldBroadcast sur private-movie-session.{code}
-routes/channels.php      auth du canal via le code de session
+  VideoStateUpdated      ShouldBroadcastNow sur presence-movie-session.{code}
+  ReactionSent           ShouldBroadcastNow sur presence-movie-session.{code} (réactions emoji)
+                         POST /api/broadcasting/auth  signe l'abonnement (présence) si le code existe (authChannel)
 ```
 
 Point clé : c'est **`POST /state`** qui met à jour la DB *et* déclenche le broadcast, en estampillant `server_timestamp_ms` et en incrémentant `seq`.

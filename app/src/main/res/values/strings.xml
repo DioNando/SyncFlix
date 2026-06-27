@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SyncFlix</string>
+    <string name="app_name">Miray</string>
     <string name="app_tagline">Regardez ensemble, à distance</string>
 
     <!-- Commun -->
@@ -10,18 +10,25 @@
     <string name="pairing_server_label">Adresse du serveur</string>
     <string name="pairing_server_hint">https://mon-pc.expose.dev</string>
     <string name="pairing_code_label">Code de session</string>
-    <string name="pairing_code_hint">ABC123</string>
     <string name="pairing_create">Créer une session</string>
     <string name="pairing_join">Rejoindre la session</string>
     <string name="pairing_error_server">Renseigne l\'adresse du serveur.</string>
     <string name="pairing_error_code">Saisis un code de session.</string>
     <string name="pairing_error_not_found">Session introuvable. Vérifie le code.</string>
     <string name="pairing_error_network">Connexion au serveur impossible. Vérifie l\'adresse et le tunnel.</string>
-    <string name="pairing_code_ready_title">Voici ton code</string>
-    <string name="pairing_code_ready_hint">Partage-le avec l\'autre personne pour regarder ensemble.</string>
     <string name="pairing_copy">Copier le code</string>
     <string name="pairing_copied">Code copié ✓</string>
-    <string name="pairing_start">Commencer à regarder</string>
+
+    <!-- Choix du film -->
+    <string name="movie_picker_title">Choisir un film</string>
+    <string name="movie_picker_empty">Aucun film dans la bibliothèque. Dépose des fichiers sur le serveur puis lance « movies:scan ».</string>
+    <string name="movie_picker_error">Impossible de charger les films. Vérifie l\'adresse du serveur.</string>
+
+    <!-- Salon d\'attente -->
+    <string name="lobby_title">Salon d\'attente</string>
+    <string name="lobby_hint">Partage ce code avec l\'autre personne pour regarder ensemble.</string>
+    <string name="lobby_waiting">En attente de ton/ta partenaire… (%1$d/2)</string>
+    <string name="lobby_enter_alone">Entrer seul·e</string>
 
     <!-- Lecteur -->
     <string name="player_session_code">Session %1$s</string>
@@ -38,5 +45,6 @@
     <string name="cd_pause">Pause</string>
     <string name="cd_seek_back">Reculer de 10 secondes</string>
     <string name="cd_seek_forward">Avancer de 10 secondes</string>
-    <string name="cd_logo">Logo SyncFlix</string>
+    <string name="cd_logo">Logo Miray</string>
+    <string name="cd_react">Envoyer la réaction %1$s</string>
 </resources>

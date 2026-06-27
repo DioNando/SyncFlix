@@ -1,5 +1,5 @@
-<!-- Premier plan de l'icône adaptative (converti de logo/ic_launcher_foreground.svg) : marque Miray
-     bleue (#004071), centrée dans la zone sûre, sur fond or pâle. -->
+<!-- Calque monochrome de l'icône adaptative (converti de logo/ic_launcher_monochrome.svg) :
+     silhouette de la marque (le système applique sa propre teinte aux icônes thématiques). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -7,20 +7,19 @@
     android:viewportHeight="108">
 
     <path
-        android:fillColor="#FF004071"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M54,34.5H32.9a1.4,1.4,0,0,0-1.4,1.4V57A22.5,22.5,0,0,0,54,79.5V70.73s0,0,0,0H53a10.22,10.22,0,0,1-10.1-8.61,1.39,1.39,0,0,1,1.38-1.61H54s0,0,0,0ZM47.59,50.25H39.14a1.4,1.4,0,0,1-1.4-1.4h0a5.72,5.72,0,0,1,5.54-5.76A5.63,5.63,0,0,1,49,48.72v.13A1.4,1.4,0,0,1,47.59,50.25Z" />
 
-    <!-- SVG: translate(129.27 93.34) rotate(180) ≡ rotation 180° autour de (64.635, 46.67). -->
     <group
         android:pivotX="64.635"
         android:pivotY="46.67"
         android:rotation="180">
         <path
-            android:fillColor="#FF004071"
+            android:fillColor="#FFFFFFFF"
             android:pathData="M64.64,43.09h0a5.62,5.62,0,0,1,5.62,5.62v0a1.5,1.5,0,0,1-1.5,1.5H60.52a1.5,1.5,0,0,1-1.5-1.5v0a5.62,5.62,0,0,1,5.62-5.62Z" />
     </group>
 
     <path
-        android:fillColor="#FF004071"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M63.74,70.7H54a0,0,0,0,1,0,0V60.5a0,0,0,0,1,0,0h1a10.22,10.22,0,0,1,10.1,8.62A1.38,1.38,0,0,1,63.74,70.7Z" />
 </vector>

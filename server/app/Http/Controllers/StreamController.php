@@ -25,4 +25,24 @@ class StreamController extends Controller
             'Content-Type' => 'video/mp4',
         ]);
     }
+
+    /**
+     * Diffuse une piste de sous-titres « sidecar » du film ([index] = position dans `subtitles`).
+     *
+     * Le type MIME (`text/vtt` / `application/x-subrip`) est celui détecté au scan, pour qu'ExoPlayer
+     * sache parser la piste. Sélection 100 % locale côté app (aucune synchro entre spectateurs).
+     */
+    public function subtitle(Movie $movie, int $index): BinaryFileResponse
+    {
+        $subtitles = $movie->subtitles ?? [];
+        abort_unless(isset($subtitles[$index]), 404, 'Sous-titre introuvable.');
+
+        $sub = $subtitles[$index];
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($sub['path']), 404, 'Fichier de sous-titres introuvable.');
+
+        return response()->file($disk->path($sub['path']), [
+            'Content-Type' => $sub['mime'],
+        ]);
+    }
 }

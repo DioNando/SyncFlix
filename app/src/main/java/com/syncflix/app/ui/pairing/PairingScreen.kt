@@ -1,13 +1,8 @@
 package com.syncflix.app.ui.pairing
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,19 +10,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -38,20 +29,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.syncflix.app.R
 import com.syncflix.app.data.model.SessionState
 import com.syncflix.app.data.remote.SessionApi
 import com.syncflix.app.data.remote.SessionException
 import com.syncflix.app.ui.components.ActionCard
+import com.syncflix.app.ui.components.CodeField
 import com.syncflix.app.ui.components.SyncFlixFieldShape
 import com.syncflix.app.ui.components.syncflixFieldColors
 import kotlinx.coroutines.launch
@@ -66,6 +54,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PairingScreen(
     onConnect: (SessionState) -> Unit,
+    onPickMovie: (String) -> Unit,
 ) {
     val api = remember { SessionApi() }
     val scope = rememberCoroutineScope()
@@ -76,10 +65,8 @@ fun PairingScreen(
     var codeError by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var errorRes by remember { mutableStateOf<Int?>(null) }
-    // Session créée en attente de partage : tant qu'elle est non nulle, on affiche le panneau du code.
-    var created by remember { mutableStateOf<SessionState?>(null) }
 
-    /** Lance un appel réseau (create/join) avec gestion du chargement et des erreurs. */
+    /** Lance un appel réseau (join) avec gestion du chargement et des erreurs. */
     fun run(onSuccess: (SessionState) -> Unit, call: suspend () -> SessionState) {
         errorRes = null
         loading = true
@@ -100,9 +87,11 @@ fun PairingScreen(
         }
     }
 
+    // « Créer » = choisir d'abord le film (l'adresse serveur doit être renseignée) ; la session est
+    // créée à la sélection du film. Le code à partager s'affiche ensuite dans le salon d'attente.
     fun create() {
         serverError = server.isBlank()
-        if (!serverError) run(onSuccess = { created = it }) { api.create(server) }
+        if (!serverError) onPickMovie(server)
     }
 
     fun join() {
@@ -122,21 +111,20 @@ fun PairingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            // En-tête de marque (logo + nom) — pattern commun à toutes les apps.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(R.drawable.logo),
-                    contentDescription = stringResource(R.string.cd_logo),
-                    modifier = Modifier.size(40.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
+            // En-tête de marque : logo AU-DESSUS du nom (empilé, centré).
+            // Logo bicolore (bleu + or) → pas de teinte, on garde ses couleurs d'origine.
+            Image(
+                painter = painterResource(R.drawable.logo),
+                contentDescription = stringResource(R.string.cd_logo),
+                modifier = Modifier.size(80.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
             Spacer(Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.app_tagline),
@@ -146,28 +134,18 @@ fun PairingScreen(
 
             Spacer(Modifier.height(40.dp))
 
-            // Transition douce formulaire ↔ panneau du code (après création de session).
-            Crossfade(targetState = created, label = "pairing-content") { pending ->
-                // Column requise : Crossfade place le contenu dans une Box (sinon empilement).
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (pending != null) {
-                        CodeReadyPanel(code = pending.code, onStart = { onConnect(pending) })
-                    } else {
-                        PairingForm(
-                            server = server,
-                            code = code,
-                            serverError = serverError,
-                            codeError = codeError,
-                            loading = loading,
-                            errorRes = errorRes,
-                            onServerChange = { server = it; serverError = false },
-                            onCodeChange = { code = it; codeError = false },
-                            onJoin = ::join,
-                            onCreate = ::create,
-                        )
-                    }
-                }
-            }
+            PairingForm(
+                server = server,
+                code = code,
+                serverError = serverError,
+                codeError = codeError,
+                loading = loading,
+                errorRes = errorRes,
+                onServerChange = { server = it; serverError = false },
+                onCodeChange = { code = it; codeError = false },
+                onJoin = ::join,
+                onCreate = ::create,
+            )
         }
     }
 }
@@ -202,27 +180,33 @@ private fun PairingForm(
         colors = syncflixFieldColors(),
     )
 
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(20.dp))
 
-    TextField(
+    // Code d'appairage : 6 cases (le code fait toujours 6 caractères).
+    Text(
+        text = stringResource(R.string.pairing_code_label),
+        style = MaterialTheme.typography.labelLarge,
+        color = if (codeError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, bottom = 8.dp),
+    )
+    CodeField(
         value = code,
         onValueChange = onCodeChange,
-        modifier = Modifier.fillMaxWidth(),
         enabled = !loading,
-        label = { Text(stringResource(R.string.pairing_code_label)) },
-        placeholder = { Text(stringResource(R.string.pairing_code_hint)) },
-        singleLine = true,
         isError = codeError,
-        supportingText = if (codeError) {
-            { Text(stringResource(R.string.pairing_error_code)) }
-        } else null,
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.Characters,
-            keyboardType = KeyboardType.Text,
-        ),
-        shape = SyncFlixFieldShape,
-        colors = syncflixFieldColors(),
+        contentDescription = stringResource(R.string.pairing_code_label),
     )
+    if (codeError) {
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.pairing_error_code),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp),
+        )
+    }
 
     errorRes?.let { res ->
         Spacer(Modifier.height(12.dp))
@@ -243,6 +227,7 @@ private fun PairingForm(
             label = stringResource(R.string.pairing_join),
             accent = MaterialTheme.colorScheme.primary,
             onClick = onJoin,
+            filled = true,
         )
 
         Spacer(Modifier.height(12.dp))
@@ -250,74 +235,10 @@ private fun PairingForm(
         ActionCard(
             icon = Icons.Rounded.Add,
             label = stringResource(R.string.pairing_create),
-            accent = MaterialTheme.colorScheme.secondary,
+            // Conteneur secondaire = or pâle #FFF2A1 (texte foncé), même teinte dans les deux thèmes.
+            accent = MaterialTheme.colorScheme.secondaryContainer,
             onClick = onCreate,
+            filled = true,
         )
     }
-}
-
-/** Panneau affiché après création : le code à partager + copie + bouton pour entrer dans le lecteur. */
-@Composable
-private fun CodeReadyPanel(
-    code: String,
-    onStart: () -> Unit,
-) {
-    val context = LocalContext.current
-    var copied by remember { mutableStateOf(false) }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.pairing_code_ready_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = code,
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 8.sp,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.pairing_code_ready_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-
-    Spacer(Modifier.height(16.dp))
-
-    ActionCard(
-        icon = if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
-        label = stringResource(if (copied) R.string.pairing_copied else R.string.pairing_copy),
-        accent = MaterialTheme.colorScheme.secondary,
-        onClick = {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("SyncFlix", code))
-            copied = true
-        },
-    )
-
-    Spacer(Modifier.height(12.dp))
-
-    ActionCard(
-        icon = Icons.Rounded.PlayArrow,
-        label = stringResource(R.string.pairing_start),
-        accent = MaterialTheme.colorScheme.primary,
-        onClick = onStart,
-    )
 }

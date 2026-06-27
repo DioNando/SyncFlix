@@ -14,32 +14,42 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 // Thème sombre « salle obscure » — l'usage par défaut de SyncFlix (visionnage le soir).
+// Accent = bleu ÉCLAIRCI (le bleu de marque #004071 sert de primaryContainer, illisible en accent
+// sur fond sombre) ; or pâle en secondaire (ressort sur le sombre).
 private val DarkColors = darkColorScheme(
-    primary = Coral,
-    onPrimary = OnCoralDark,
-    primaryContainer = CoralContainerDark,
-    onPrimaryContainer = OnCoralContainerDark,
-    secondary = VioletSoft,
-    onSecondary = OnVioletDark,
-    tertiary = VioletSoft,
+    primary = BlueAccent,
+    onPrimary = BlueOnAccent,
+    primaryContainer = BrandBlue,
+    onPrimaryContainer = OnBlueContainerDark,
+    secondary = Gold,
+    onSecondary = OnGoldDark,
+    // Conteneur secondaire = or pâle de marque (#FFF2A1) dans les DEUX thèmes, texte foncé →
+    // permet au bouton « Créer » d'afficher littéralement #FFF2A1 partout.
+    secondaryContainer = Gold,
+    onSecondaryContainer = OnGoldDark,
+    tertiary = Gold,
     background = CinemaBackground,
-    onBackground = Color(0xFFEDE6F0),
+    onBackground = CinemaOnSurface,
     surface = CinemaSurface,
-    onSurface = Color(0xFFEDE6F0),
+    onSurface = CinemaOnSurface,
     surfaceContainer = CinemaSurface,
     surfaceContainerHigh = CinemaSurfaceHigh,
     surfaceContainerHighest = CinemaSurfaceHighest,
 )
 
 // Thème clair de repli (si l'utilisateur force le mode clair via le système).
+// Ici le bleu de marque #004071 est lisible en `primary` ; l'or pâle, trop clair en aplat, passe
+// en conteneur (texte foncé), et le secondaire est un or assombri.
 private val LightColors = lightColorScheme(
-    primary = Coral,
+    primary = BrandBlue,
     onPrimary = Color.White,
-    primaryContainer = CoralSoft,
-    onPrimaryContainer = OnCoralContainerLight,
-    secondary = VioletInk,
+    primaryContainer = BlueContainerLight,
+    onPrimaryContainer = OnBlueContainerLight,
+    secondary = GoldDeep,
     onSecondary = Color.White,
-    tertiary = VioletInk,
+    secondaryContainer = Gold,
+    onSecondaryContainer = OnGoldContainerLight,
+    tertiary = GoldDeep,
 )
 
 /** Material You disponible uniquement à partir d'Android 12 (API 31). */
@@ -48,8 +58,8 @@ val dynamicColorSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODE
 /**
  * Thème de marque SyncFlix, basé sur **Material 3 Expressive**.
  *
- * On conserve la palette « cinéma sombre + corail » (les schémas Expressive génériques diluent
- * l'identité). L'apport Expressive vient de :
+ * On conserve la palette « cinéma sombre + bleu nuit & or pâle » (les schémas Expressive génériques
+ * diluent l'identité). L'apport Expressive vient de :
  * - [MotionScheme.expressive] : ressorts physiques appliqués automatiquement à tous les composants.
  * - [SyncFlixShapes] : échelle de formes arrondie (cf. Shape.kt).
  *
