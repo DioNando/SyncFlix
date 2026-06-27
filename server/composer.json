@@ -43,7 +43,7 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan reverb:start\" \"caddy run\" \"ngrok http 8088\" --names=api,reverb,caddy,ngrok --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185\" \"php artisan serve\" \"php artisan reverb:start\" \"caddy run\" --names=api,reverb,caddy --kill-others"
         ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",

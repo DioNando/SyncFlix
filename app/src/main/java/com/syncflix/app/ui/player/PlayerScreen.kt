@@ -5,16 +5,26 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.res.Configuration
+import android.content.Intent
 import android.net.Uri
+import android.view.LayoutInflater
+import android.view.View
+import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -34,11 +44,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,15 +74,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -77,6 +94,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -91,6 +109,7 @@ import com.syncflix.app.data.model.VideoState
 import com.syncflix.app.data.remote.ClockSync
 import com.syncflix.app.data.remote.SessionApi
 import com.syncflix.app.data.remote.SyncSocket
+import com.syncflix.app.data.settings.SettingsStore
 import com.syncflix.app.domain.sync.PlaybackSyncManager
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -104,9 +123,6 @@ private const val REVERB_APP_KEY = "9dfaadf61b6ac53c4a66"
 private const val USE_TEST_STREAM = false
 private const val TEST_STREAM_URL =
     "https://media.w3.org/2010/05/sintel/trailer.mp4"
-
-// Palette de réactions emoji disponibles pendant le visionnage.
-private val REACTIONS = listOf("❤️", "😂", "😮", "👍", "🔥")
 
 /** État de la connexion temps réel, affiché discrètement dans le bandeau du lecteur. */
 private enum class SyncStatus { Connecting, Synced, Offline }
@@ -145,7 +161,11 @@ fun PlayerScreen(
     val view = LocalView.current
 
     // Plein écran « cinéma » en paysage : on masque les barres système (et le bandeau, plus bas).
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // ⚠️ On détecte l'orientation via la TAILLE RÉELLE de la fenêtre, pas via `Configuration`, car
+    // `MainActivity.attachBaseContext` (locale forcée FR) fige la config → l'orientation n'y est pas
+    // mise à jour à la rotation. La taille de fenêtre, elle, change bien.
+    val windowSize = LocalWindowInfo.current.containerSize
+    val isLandscape = windowSize.width > windowSize.height
     DisposableEffect(isLandscape) {
         val window = context.findActivity()?.window
         val bars = WindowInsetsCompat.Type.systemBars()
@@ -188,6 +208,19 @@ fun PlayerScreen(
     val reactions = remember { mutableStateListOf<FloatingReaction>() }
     var reactionSeq by remember { mutableStateOf(0L) }
 
+    // --- Réglages + état d'écran -------------------------------------------------------------------
+    val settings = SettingsStore.settings
+    var locked by remember { mutableStateOf(false) }          // verrou des contrôles (anti-touche)
+    var showQuitConfirm by remember { mutableStateOf(false) } // confirmation avant de quitter
+    // Visibilité de la chrome (header + barre de réactions), pilotée par le contrôleur natif
+    // (ControllerVisibilityListener) : tap → affiche, auto-masquage Media3, 2e tap → masque.
+    var controlsVisible by remember { mutableStateOf(true) }
+
+    // Le retour système demande confirmation (on ne quitte pas une session par inadvertance).
+    BackHandler(enabled = !showQuitConfirm) {
+        if (locked) locked = false else showQuitConfirm = true
+    }
+
     // ExoPlayer lié à la composition : créé une fois, libéré à la sortie de l'écran.
     val exoPlayer = remember {
         // Source HTTP : on envoie `ngrok-skip-browser-warning` pour sauter la page d'avertissement
@@ -218,6 +251,21 @@ fun PlayerScreen(
                 playWhenReady = USE_TEST_STREAM || session.isPlaying
                 prepare()
             }
+    }
+
+    // Player « vitrine » pour le CONTRÔLEUR natif : masque la commande de vitesse → l'option Vitesse
+    // disparaît du menu. Le vrai [exoPlayer] reste piloté par le PlaybackSyncManager (correction de
+    // dérive par la vitesse), donc retirer la vitesse de l'UI n'impacte pas la synchro.
+    val controllerPlayer = remember(exoPlayer) {
+        object : ForwardingPlayer(exoPlayer) {
+            override fun getAvailableCommands(): Player.Commands =
+                super.getAvailableCommands().buildUpon()
+                    .remove(Player.COMMAND_SET_SPEED_AND_PITCH)
+                    .build()
+
+            override fun isCommandAvailable(command: Int): Boolean =
+                command != Player.COMMAND_SET_SPEED_AND_PITCH && super.isCommandAvailable(command)
+        }
     }
 
     // Écoute l'état de lecture (mémoire tampon) + les erreurs, pour les remonter à l'overlay.
@@ -326,9 +374,11 @@ fun PlayerScreen(
                         peers = event.count
                         if (event.count >= 2) startedTogether = true
                     }
-                    is SyncSocket.Event.Reaction -> reactions.add(
-                        FloatingReaction(reactionSeq++, event.emoji),
-                    )
+                    is SyncSocket.Event.Reaction ->
+                        // Lecture live du réglage (le lambda survit aux changements de réglage).
+                        if (SettingsStore.settings.showReactions) {
+                            reactions.add(FloatingReaction(reactionSeq++, event.emoji))
+                        }
                     SyncSocket.Event.Disconnected -> status = SyncStatus.Offline
                 }
             }
@@ -344,20 +394,25 @@ fun PlayerScreen(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = true
-                    keepScreenOn = true
-                    setShowNextButton(false)
-                    setShowPreviousButton(false)
-                    setShowSubtitleButton(true) // bouton CC : choix local des sous-titres
+                // Inflé depuis XML pour obtenir une TEXTURE_VIEW (évite le flash noir à la sortie).
+                // Contrôles NATIFS Media3 ; on lui donne un player « enveloppé » qui masque la commande
+                // de vitesse → l'option Vitesse disparaît du menu, SANS impacter la synchro (le
+                // PlaybackSyncManager pilote le vrai exoPlayer pour sa correction de dérive).
+                (LayoutInflater.from(ctx).inflate(R.layout.view_player, null) as PlayerView).apply {
+                    player = controllerPlayer
+                    // Header + barre de réactions suivent la visibilité des contrôles natifs.
+                    setControllerVisibilityListener(
+                        PlayerView.ControllerVisibilityListener { visibility ->
+                            controlsVisible = visibility == View.VISIBLE
+                        },
+                    )
                 }
             },
             update = { view ->
-                // Pendant le salon d'attente, on coupe les contrôles natifs : sinon ils
-                // transparaissent sous le voile et restent cliquables (on pouvait lancer la vidéo).
-                view.useController = !showLobby
-                if (showLobby) view.hideController()
+                // Contrôles natifs coupés pendant le salon d'attente (sinon ils transparaissent sous
+                // le voile) et quand l'écran est verrouillé (anti-touche).
+                view.useController = !showLobby && !locked
+                if (showLobby || locked) view.hideController()
             },
         )
 
@@ -404,31 +459,40 @@ fun PlayerScreen(
 
         // Réactions qui flottent (au-dessus de la vidéo, sous le bandeau). `key` par id → chaque
         // animation reste stable même si une autre réaction se termine au milieu de la liste.
-        reactions.forEach { reaction ->
-            key(reaction.id) {
-                FloatingEmoji(
-                    reaction = reaction,
-                    onDone = { reactions.remove(reaction) },
-                )
+        // Abaissées en paysage (sinon trop hautes) et masquables via les réglages.
+        if (settings.showReactions) {
+            val floatingBottom = if (isLandscape) 40.dp else 140.dp
+            reactions.forEach { reaction ->
+                key(reaction.id) {
+                    FloatingEmoji(
+                        reaction = reaction,
+                        bottomPadding = floatingBottom,
+                        onDone = { reactions.remove(reaction) },
+                    )
+                }
             }
         }
 
-        // Barre de réactions (cachée pendant le salon d'attente).
-        if (!showLobby) {
+        // Barre de réactions : visible avec les contrôles natifs (tap pour afficher, auto-masquage),
+        // sauf pendant le salon d'attente, le verrou, ou si désactivée. Placée au-dessus de la
+        // barre de progression (plus bas en paysage).
+        if (controlsVisible && !showLobby && !locked && settings.showReactions) {
             ReactionBar(
+                emojis = settings.reactions,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 88.dp),
+                    .padding(bottom = if (isLandscape) 56.dp else 96.dp),
                 onReact = { emoji ->
                     scope.launch { runCatching { sessionApi.react(session.serverUrl, session.code, emoji) } }
                 },
             )
         }
 
-        // Bandeau supérieur : retour + titre + code + état de synchro (translucide).
-        // Masqué en paysage pour un plein écran « cinéma » (retour via le geste système).
-        if (!isLandscape) Surface(
+        // Bandeau supérieur : retour + titre + code + verrou + état de synchro (translucide).
+        // Suit la visibilité des contrôles (sinon il couvre le haut de la vidéo en lecture) ;
+        // masqué en paysage (plein écran « cinéma ») et quand l'écran est verrouillé.
+        if (!isLandscape && !locked && controlsVisible) Surface(
             color = Color.Black.copy(alpha = 0.35f),
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -441,7 +505,7 @@ fun PlayerScreen(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = { showQuitConfirm = true }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = stringResource(R.string.cd_back),
@@ -449,11 +513,14 @@ fun PlayerScreen(
                     )
                 }
                 Column(modifier = Modifier.padding(start = 4.dp)) {
-                    Text(
-                        text = session.movieTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                    )
+                    // Titre masquable via les réglages.
+                    if (settings.showMovieTitle) {
+                        Text(
+                            text = session.movieTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                        )
+                    }
                     Text(
                         text = stringResource(R.string.player_session_code, session.code),
                         style = MaterialTheme.typography.bodySmall,
@@ -461,6 +528,14 @@ fun PlayerScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                // Verrouiller l'écran (anti-touche pendant le visionnage).
+                IconButton(onClick = { locked = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = stringResource(R.string.cd_lock),
+                        tint = Color.White,
+                    )
+                }
                 // Pastille d'état (la 1re version affichait « Synchronisé » qui se cassait en
                 // vertical dans le bandeau étroit) : vert = synchro, ambre = connexion, rouge = hors ligne.
                 SyncStatusDot(status)
@@ -487,10 +562,19 @@ fun PlayerScreen(
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                     )
-                    Text(
-                        text = stringResource(
+                    val partner = settings.partnerName
+                    val hintText = if (partner.isNotBlank()) {
+                        stringResource(
+                            if (hint.isPlaying) R.string.player_remote_play_named else R.string.player_remote_pause_named,
+                            partner,
+                        )
+                    } else {
+                        stringResource(
                             if (hint.isPlaying) R.string.player_remote_play else R.string.player_remote_pause,
-                        ),
+                        )
+                    }
+                    Text(
+                        text = hintText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White,
                     )
@@ -504,11 +588,67 @@ fun PlayerScreen(
                 code = session.code,
                 movieTitle = session.movieTitle,
                 peers = peers,
+                partnerName = settings.partnerName,
+                isLandscape = isLandscape,
                 onCopy = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("Miray", session.code))
                 },
+                onShare = {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, session.code) // juste le code
+                    }
+                    context.startActivity(Intent.createChooser(send, null))
+                },
                 onEnterAlone = { lobbyBypassed = true },
+            )
+        }
+
+        // Écran verrouillé : capte tous les taps (anti-touche) + un bouton pour déverrouiller.
+        if (locked) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {},
+            )
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.45f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(12.dp),
+            ) {
+                IconButton(onClick = { locked = false }) {
+                    Icon(
+                        imageVector = Icons.Rounded.LockOpen,
+                        contentDescription = stringResource(R.string.cd_unlock),
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+
+        // Confirmation avant de quitter la session partagée.
+        if (showQuitConfirm) {
+            AlertDialog(
+                onDismissRequest = { showQuitConfirm = false },
+                title = { Text(stringResource(R.string.player_quit_title)) },
+                text = { Text(stringResource(R.string.player_quit_message)) },
+                confirmButton = {
+                    TextButton(onClick = { showQuitConfirm = false; onBack() }) {
+                        Text(stringResource(R.string.player_quit_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showQuitConfirm = false }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                },
             )
         }
     }
@@ -539,83 +679,155 @@ private fun SyncStatusDot(status: SyncStatus) {
     )
 }
 
-/** Voile du salon d'attente : film, code à partager (carte « ticket ») + attente du partenaire. */
+/** Indicateur d'attente ludique : trois points qui rebondissent en cascade (plus fun qu'un spinner). */
+@Composable
+private fun WaitingDots(color: Color) {
+    val transition = rememberInfiniteTransition(label = "waiting-dots")
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(3) { i ->
+            val y by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = -10f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 420),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(i * 140),
+                ),
+                label = "dot-$i",
+            )
+            Box(
+                modifier = Modifier
+                    .offset(y = y.dp)
+                    .size(9.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+        }
+    }
+}
+
+/**
+ * Voile du salon d'attente. **Portrait** : une colonne centrée. **Paysage** : deux colonnes (infos |
+ * code + actions) pour tenir en hauteur sans déborder (le voile capte les taps → un scroll y serait
+ * bloqué, d'où le choix 2 colonnes).
+ */
 @Composable
 private fun BoxScope.LobbyOverlay(
     code: String,
     movieTitle: String,
     peers: Int,
+    partnerName: String,
+    isLandscape: Boolean,
     onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onEnterAlone: () -> Unit,
+) {
+    // Voile OPAQUE + capture des taps (sans ripple) : rien ne transparaît et les contrôles du lecteur
+    // dessous ne sont pas atteignables tant que le partenaire n'est pas là.
+    val scrim = Modifier
+        .matchParentSize()
+        .background(Color.Black)
+        .clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+        ) {}
+        .statusBarsPadding()
+        .navigationBarsPadding()
+
+    if (isLandscape) {
+        Row(
+            modifier = scrim.padding(horizontal = 40.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(32.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                LobbyInfo(movieTitle)
+            }
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                LobbyActions(code, peers, partnerName, onCopy, onShare, onEnterAlone)
+            }
+        }
+    } else {
+        Column(
+            modifier = scrim.padding(horizontal = 32.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            LobbyInfo(movieTitle)
+            Spacer(Modifier.height(28.dp))
+            LobbyActions(code, peers, partnerName, onCopy, onShare, onEnterAlone)
+        }
+    }
+}
+
+/** Bloc « infos » du salon : pastille film + titre + nom du film + invitation. */
+@Composable
+private fun LobbyInfo(movieTitle: String) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(64.dp)) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Rounded.Movie,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+    }
+    Spacer(Modifier.height(20.dp))
+    Text(
+        text = stringResource(R.string.lobby_title),
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
+        color = Color.White,
+    )
+    Spacer(Modifier.height(6.dp))
+    Text(
+        text = movieTitle,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = stringResource(R.string.lobby_hint),
+        style = MaterialTheme.typography.bodyMedium,
+        color = Color.White.copy(alpha = 0.7f),
+        textAlign = TextAlign.Center,
+    )
+}
+
+/** Bloc « actions » du salon : carte du code + copier/partager + attente + entrer seul·e. */
+@Composable
+private fun LobbyActions(
+    code: String,
+    peers: Int,
+    partnerName: String,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
     onEnterAlone: () -> Unit,
 ) {
     var copied by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .matchParentSize()
-            // Voile OPAQUE + capture des taps (sans ripple) : rien ne transparaît et les contrôles
-            // du lecteur dessous ne sont pas atteignables tant que le partenaire n'est pas là.
-            .background(Color.Black)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {}
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 32.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+
+    // Carte « ticket » : le code à partager, bien lisible et détouré.
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = Color.White.copy(alpha = 0.06f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
     ) {
-        // Pastille d'icône tonale (style charte).
-        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(64.dp)) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Rounded.Movie,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(30.dp),
-                )
-            }
-        }
-        Spacer(Modifier.height(20.dp))
         Text(
-            text = stringResource(R.string.lobby_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = movieTitle,
-            style = MaterialTheme.typography.titleMedium,
+            text = code,
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 12.sp,
             color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.lobby_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(Modifier.height(28.dp))
-
-        // Carte « ticket » : le code à partager, bien lisible et détouré.
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = Color.White.copy(alpha = 0.06f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-        ) {
-            Text(
-                text = code,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 12.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
-            )
-        }
-        Spacer(Modifier.height(16.dp))
+    }
+    Spacer(Modifier.height(16.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
         FilledTonalButton(onClick = { onCopy(); copied = true }) {
             Icon(
                 imageVector = if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
@@ -625,35 +837,41 @@ private fun BoxScope.LobbyOverlay(
             Spacer(Modifier.size(8.dp))
             Text(stringResource(if (copied) R.string.pairing_copied else R.string.pairing_copy))
         }
-
-        Spacer(Modifier.height(40.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-            )
-            Spacer(Modifier.size(12.dp))
-            Text(
-                text = stringResource(R.string.lobby_waiting, peers),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
-            )
+        Spacer(Modifier.size(8.dp))
+        // Partager : icône seule (ouvre la feuille de partage Android).
+        FilledTonalIconButton(onClick = onShare) {
+            Icon(Icons.Rounded.Share, contentDescription = stringResource(R.string.cd_share))
         }
-        Spacer(Modifier.height(16.dp))
-        TextButton(onClick = onEnterAlone) {
-            Text(
-                text = stringResource(R.string.lobby_enter_alone),
-                color = Color.White.copy(alpha = 0.7f),
-            )
-        }
+    }
+
+    Spacer(Modifier.height(28.dp))
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        WaitingDots(color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.size(12.dp))
+        Text(
+            text = if (partnerName.isNotBlank()) {
+                stringResource(R.string.lobby_waiting_named, partnerName, peers)
+            } else {
+                stringResource(R.string.lobby_waiting, peers)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White,
+        )
+    }
+    Spacer(Modifier.height(12.dp))
+    TextButton(onClick = onEnterAlone) {
+        Text(
+            text = stringResource(R.string.lobby_enter_alone),
+            color = Color.White.copy(alpha = 0.7f),
+        )
     }
 }
 
 /** Barre d'emojis de réaction (diffusés à tous les spectateurs). */
 @Composable
 private fun ReactionBar(
+    emojis: List<String>,
     modifier: Modifier = Modifier,
     onReact: (String) -> Unit,
 ) {
@@ -668,20 +886,32 @@ private fun ReactionBar(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            REACTIONS.forEach { emoji ->
-                Text(
-                    text = emoji,
-                    fontSize = 26.sp,
-                    modifier = Modifier
-                        .clickable(
-                            onClickLabel = stringResource(R.string.cd_react, emoji),
-                            onClick = { onReact(emoji) },
-                        )
-                        .padding(8.dp),
-                )
+            emojis.forEach { emoji ->
+                ReactionEmoji(emoji = emoji, onReact = onReact)
             }
         }
     }
+}
+
+/** Un emoji de réaction : pas de fond/ripple, juste un petit agrandissement à l'appui. */
+@Composable
+private fun ReactionEmoji(emoji: String, onReact: (String) -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(targetValue = if (pressed) 1.4f else 1f, label = "reaction-scale")
+    Text(
+        text = emoji,
+        fontSize = 26.sp,
+        modifier = Modifier
+            .clickable(
+                interactionSource = interaction,
+                indication = null, // pas de fond gris : seul l'emoji s'agrandit
+                onClickLabel = stringResource(R.string.cd_react, emoji),
+                onClick = { onReact(emoji) },
+            )
+            .scale(scale)
+            .padding(8.dp),
+    )
 }
 
 /**
@@ -693,6 +923,7 @@ private fun ReactionBar(
 @Composable
 private fun FloatingEmoji(
     reaction: FloatingReaction,
+    bottomPadding: Dp,
     onDone: () -> Unit,
 ) {
     val progress = remember(reaction.id) { Animatable(0f) }
@@ -710,7 +941,7 @@ private fun FloatingEmoji(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 24.dp, bottom = 140.dp)
+                .padding(end = 24.dp, bottom = bottomPadding)
                 .offset(x = drift.dp, y = (-220 * p).dp)
                 .alpha(1f - p),
         )

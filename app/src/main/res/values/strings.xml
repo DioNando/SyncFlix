@@ -5,6 +5,20 @@
 
     <!-- Commun -->
     <string name="common_or">ou</string>
+    <string name="common_cancel">Annuler</string>
+
+    <!-- Réglages -->
+    <string name="settings_title">Réglages</string>
+    <string name="settings_section_server">Serveur</string>
+    <string name="settings_default_server_label">Adresse du serveur par défaut</string>
+    <string name="settings_section_partner">Partenaire</string>
+    <string name="settings_partner_label">Nom de ton/ta partenaire</string>
+    <string name="settings_section_player">Lecteur</string>
+    <string name="settings_show_title">Afficher le titre du film</string>
+    <string name="settings_show_reactions">Afficher les réactions</string>
+    <string name="settings_section_reactions">Réactions</string>
+    <string name="settings_reactions_label">Tes emojis (un par case, 6 max)</string>
+    <string name="settings_reactions_reset">Réinitialiser</string>
 
     <!-- Appairage -->
     <string name="pairing_server_label">Adresse du serveur</string>
@@ -17,7 +31,7 @@
     <string name="pairing_error_not_found">Session introuvable. Vérifie le code.</string>
     <string name="pairing_error_network">Connexion au serveur impossible. Vérifie l\'adresse et le tunnel.</string>
     <string name="pairing_copy">Copier le code</string>
-    <string name="pairing_copied">Code copié ✓</string>
+    <string name="pairing_copied">Code copié</string>
 
     <!-- Choix du film -->
     <string name="movie_picker_title">Choisir un film</string>
@@ -28,6 +42,7 @@
     <string name="lobby_title">Salon d\'attente</string>
     <string name="lobby_hint">Partage ce code avec l\'autre personne pour regarder ensemble.</string>
     <string name="lobby_waiting">En attente de ton/ta partenaire… (%1$d/2)</string>
+    <string name="lobby_waiting_named">En attente de %1$s… (%2$d/2)</string>
     <string name="lobby_enter_alone">Entrer seul·e</string>
 
     <!-- Lecteur -->
@@ -38,6 +53,11 @@
     <string name="player_offline">Hors ligne</string>
     <string name="player_remote_play">L\'autre a lancé la lecture</string>
     <string name="player_remote_pause">L\'autre a mis en pause</string>
+    <string name="player_remote_play_named">%1$s a lancé la lecture</string>
+    <string name="player_remote_pause_named">%1$s a mis en pause</string>
+    <string name="player_quit_title">Quitter la session ?</string>
+    <string name="player_quit_message">Tu vas quitter le visionnage partagé.</string>
+    <string name="player_quit_confirm">Quitter</string>
 
     <!-- Descriptions d\'accessibilité (TalkBack) -->
     <string name="cd_back">Retour</string>
@@ -47,4 +67,8 @@
     <string name="cd_seek_forward">Avancer de 10 secondes</string>
     <string name="cd_logo">Logo Miray</string>
     <string name="cd_react">Envoyer la réaction %1$s</string>
+    <string name="cd_settings">Réglages</string>
+    <string name="cd_lock">Verrouiller l\'écran</string>
+    <string name="cd_unlock">Déverrouiller l\'écran</string>
+    <string name="cd_share">Partager le code</string>
 </resources>

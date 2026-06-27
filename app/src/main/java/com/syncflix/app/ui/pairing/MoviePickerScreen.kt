@@ -1,6 +1,8 @@
 package com.syncflix.app.ui.pairing
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -123,6 +126,23 @@ fun MoviePickerScreen(
                     items(current, key = { it.id }) { movie ->
                         MovieRow(movie = movie, enabled = !creating, onClick = { pick(movie) })
                     }
+                }
+            }
+
+            // Voile de chargement pendant la création de session (réseau parfois lent via Tailscale) :
+            // capte les taps et montre un spinner pour confirmer que la sélection a été prise en compte.
+            if (creating) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {},
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

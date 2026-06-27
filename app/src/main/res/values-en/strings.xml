@@ -5,6 +5,20 @@
 
     <!-- Common -->
     <string name="common_or">or</string>
+    <string name="common_cancel">Cancel</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_server">Server</string>
+    <string name="settings_default_server_label">Default server address</string>
+    <string name="settings_section_partner">Partner</string>
+    <string name="settings_partner_label">Your partner\'s name</string>
+    <string name="settings_section_player">Player</string>
+    <string name="settings_show_title">Show movie title</string>
+    <string name="settings_show_reactions">Show reactions</string>
+    <string name="settings_section_reactions">Reactions</string>
+    <string name="settings_reactions_label">Your emojis (one per box, max 6)</string>
+    <string name="settings_reactions_reset">Reset</string>
 
     <!-- Pairing -->
     <string name="pairing_server_label">Server address</string>
@@ -17,7 +31,7 @@
     <string name="pairing_error_not_found">Session not found. Check the code.</string>
     <string name="pairing_error_network">Can\'t reach the server. Check the address and tunnel.</string>
     <string name="pairing_copy">Copy code</string>
-    <string name="pairing_copied">Code copied ✓</string>
+    <string name="pairing_copied">Code copied</string>
 
     <!-- Movie picker -->
     <string name="movie_picker_title">Choose a movie</string>
@@ -28,6 +42,7 @@
     <string name="lobby_title">Waiting room</string>
     <string name="lobby_hint">Share this code with the other person to watch together.</string>
     <string name="lobby_waiting">Waiting for your partner… (%1$d/2)</string>
+    <string name="lobby_waiting_named">Waiting for %1$s… (%2$d/2)</string>
     <string name="lobby_enter_alone">Enter alone</string>
 
     <!-- Player -->
@@ -38,6 +53,11 @@
     <string name="player_offline">Offline</string>
     <string name="player_remote_play">The other person resumed</string>
     <string name="player_remote_pause">The other person paused</string>
+    <string name="player_remote_play_named">%1$s resumed</string>
+    <string name="player_remote_pause_named">%1$s paused</string>
+    <string name="player_quit_title">Leave the session?</string>
+    <string name="player_quit_message">You\'re about to leave the shared session.</string>
+    <string name="player_quit_confirm">Leave</string>
 
     <!-- Accessibility descriptions (TalkBack) -->
     <string name="cd_back">Back</string>
@@ -47,4 +67,8 @@
     <string name="cd_seek_forward">Forward 10 seconds</string>
     <string name="cd_logo">Miray logo</string>
     <string name="cd_react">Send reaction %1$s</string>
+    <string name="cd_settings">Settings</string>
+    <string name="cd_lock">Lock screen</string>
+    <string name="cd_unlock">Unlock screen</string>
+    <string name="cd_share">Share the code</string>
 </resources>

@@ -1,12 +1,17 @@
 package com.syncflix.app
 
 import android.app.Application
+import com.syncflix.app.data.settings.SettingsStore
 
 /**
  * Conteneur de dépendances de l'application (pas de framework DI).
  *
- * Vide pour l'instant (étape 2 du MVP — lecteur seul). Les services réseau (client HTTP partagé,
- * WebSocket Reverb, `ClockSync`) y seront créés paresseusement et partagés aux étapes 3-4,
- * comme dans WorkSync (cf. ARCHITECTURE.md).
+ * Initialise les préférences persistées ([SettingsStore]) au démarrage. Les services réseau restent
+ * créés paresseusement par écran (cf. ARCHITECTURE.md).
  */
-class SyncFlixApp : Application()
+class SyncFlixApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        SettingsStore.init(this)
+    }
+}

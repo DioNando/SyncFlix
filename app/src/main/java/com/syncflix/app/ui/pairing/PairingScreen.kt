@@ -16,11 +16,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +45,7 @@ import com.syncflix.app.R
 import com.syncflix.app.data.model.SessionState
 import com.syncflix.app.data.remote.SessionApi
 import com.syncflix.app.data.remote.SessionException
+import com.syncflix.app.data.settings.SettingsStore
 import com.syncflix.app.ui.components.ActionCard
 import com.syncflix.app.ui.components.CodeField
 import com.syncflix.app.ui.components.SyncFlixFieldShape
@@ -51,15 +59,18 @@ import kotlinx.coroutines.launch
  * avant d'entrer dans le lecteur) ; « Rejoindre » appelle `POST /api/sessions/{code}/join` et entre
  * directement. Conforme à la charte : style tonal, en-tête de marque, volet scrollable + `imePadding`.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PairingScreen(
     onConnect: (SessionState) -> Unit,
     onPickMovie: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val api = remember { SessionApi() }
     val scope = rememberCoroutineScope()
 
-    var server by remember { mutableStateOf("") }
+    // Pré-rempli avec l'adresse serveur par défaut des réglages (modifiable ici).
+    var server by remember { mutableStateOf(SettingsStore.settings.defaultServer) }
     var code by remember { mutableStateOf("") }
     var serverError by remember { mutableStateOf(false) }
     var codeError by remember { mutableStateOf(false) }
@@ -100,14 +111,29 @@ fun PairingScreen(
         if (!serverError && !codeError) run(onSuccess = onConnect) { api.join(server, code) }
     }
 
-    Scaffold { innerPadding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {},
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = stringResource(R.string.cd_settings),
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            )
+        },
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {

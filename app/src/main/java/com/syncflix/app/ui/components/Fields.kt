@@ -1,8 +1,8 @@
 package com.syncflix.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -103,23 +103,30 @@ fun CodeField(
                 repeat(length) { i ->
                     val char = if (i < value.length) value[i].toString() else ""
                     val active = focused && i == value.length.coerceAtMost(length - 1)
-                    val border = when {
-                        isError -> BorderStroke(2.dp, MaterialTheme.colorScheme.error)
-                        active -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                        else -> null
+                    // Case active = changement de COULEUR de fond (pas de bordure), animé.
+                    val targetColor = when {
+                        isError -> MaterialTheme.colorScheme.errorContainer
+                        active -> MaterialTheme.colorScheme.primaryContainer
+                        else -> MaterialTheme.colorScheme.surfaceContainerHighest
                     }
+                    val cellColor by animateColorAsState(targetColor, label = "code-cell-color")
+                    // Forme expressive M3 : coins qui s'arrondissent (morph ANIMÉ) sur la case active.
+                    val corner by animateDpAsState(
+                        targetValue = if (active) 28.dp else 18.dp,
+                        label = "code-cell-corner",
+                    )
+                    val cellShape = RoundedCornerShape(corner)
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp)
-                            .clip(SyncFlixFieldShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                            .then(if (border != null) Modifier.border(border, SyncFlixFieldShape) else Modifier),
+                            .height(64.dp)
+                            .clip(cellShape)
+                            .background(cellColor),
                         contentAlignment = Alignment.Center,
                     ) {
                         androidx.compose.material3.Text(
                             text = char,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )

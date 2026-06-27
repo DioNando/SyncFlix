@@ -13,11 +13,13 @@ import com.syncflix.app.data.model.SessionState
 import com.syncflix.app.ui.pairing.MoviePickerScreen
 import com.syncflix.app.ui.pairing.PairingScreen
 import com.syncflix.app.ui.player.PlayerScreen
+import com.syncflix.app.ui.settings.SettingsScreen
 
 private object Routes {
     const val PAIRING = "pairing"
     const val MOVIES = "movies"
     const val PLAYER = "player"
+    const val SETTINGS = "settings"
 }
 
 /**
@@ -45,7 +47,11 @@ fun SyncFlixNavHost() {
                     pendingServer = server
                     navController.navigate(Routes.MOVIES)
                 },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.MOVIES) {
             MoviePickerScreen(
