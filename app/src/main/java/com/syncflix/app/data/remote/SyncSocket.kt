@@ -11,6 +11,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 /**
  * Client WebSocket de synchro, parlant le **protocole Pusher** (implémenté par Laravel Reverb).
@@ -42,13 +43,19 @@ class SyncSocket(
         data object Subscribed : Event      // abonné au canal, prêt à recevoir
         data class State(val state: VideoState) : Event
         data class Presence(val count: Int) : Event   // nombre de spectateurs connectés
+        // Ids (= clientIds) des membres présents : sert au voice chat à identifier le pair et à
+        // décider qui initie l'offre WebRTC (convention : le plus grand id émet l'offre).
+        data class Members(val ids: Set<String>) : Event
         data class Reaction(val emoji: String) : Event
+        // Signalisation voix reçue d'un client event `client-voice-<type>` (offer/answer/ice/talk).
+        data class VoiceSignal(val type: String, val payload: JSONObject) : Event
         data object Disconnected : Event    // coupure (une reconnexion est planifiée)
     }
 
     private var socket: WebSocket? = null
     private var closedByUser = false
     private var reconnectScheduled = false
+    private var reconnectAttempts = 0
     // Membres de présence actuellement connectés (ids opaques) → compteur du salon d'attente.
     private val members = mutableSetOf<String>()
 
@@ -84,8 +91,13 @@ class SyncSocket(
         reconnectScheduled = true
         onEvent(Event.Disconnected)
         socket?.cancel()
+        // Backoff exponentiel plafonné + jitter : sur un réseau qui clignote, on n'inonde pas de
+        // tentatives (1→2→4→8→16 s, +0–1 s aléatoire pour désynchroniser les deux clients).
+        val backoff = (BASE_RECONNECT_MS shl reconnectAttempts.coerceAtMost(4)).coerceAtMost(MAX_RECONNECT_MS)
+        val wait = backoff + Random.nextLong(JITTER_MS)
+        reconnectAttempts++
         scope.launch {
-            delay(RECONNECT_DELAY_MS)
+            delay(wait)
             reconnectScheduled = false
             if (!closedByUser) open(onEvent)
         }
@@ -96,6 +108,20 @@ class SyncSocket(
         closedByUser = true
         socket?.close(1000, null)
         socket = null
+    }
+
+    /**
+     * Émet un **client event** Pusher (`client-<event>`) vers les autres membres du canal — utilisé
+     * pour la signalisation du voice chat (offer/answer/ICE/talk), sans aucun code serveur (Reverb
+     * relaie tel quel ; `accept_client_events_from = members` autorise déjà les membres du canal).
+     * Silencieux si le socket n'est pas (encore) connecté.
+     */
+    fun sendClient(event: String, data: JSONObject) {
+        val message = JSONObject()
+            .put("event", "client-$event")
+            .put("channel", channel)
+            .put("data", data)
+        socket?.send(message.toString())
     }
 
     private fun handle(webSocket: WebSocket, text: String, onEvent: (Event) -> Unit) {
@@ -132,6 +158,7 @@ class SyncSocket(
 
             "pusher_internal:subscription_succeeded" -> {
                 // Présence : `data.presence.ids` = membres déjà connectés à notre arrivée.
+                reconnectAttempts = 0  // connexion stable retrouvée → on repart d'un backoff court
                 members.clear()
                 val presence = JSONObject(message.getString("data")).optJSONObject("presence")
                 presence?.optJSONArray("ids")?.let { ids ->
@@ -139,18 +166,21 @@ class SyncSocket(
                 }
                 onEvent(Event.Subscribed)
                 onEvent(Event.Presence(members.size))
+                onEvent(Event.Members(members.toSet()))
             }
 
             "pusher_internal:member_added" -> {
                 val id = JSONObject(message.getString("data")).optString("user_id")
                 if (id.isNotEmpty()) members.add(id)
                 onEvent(Event.Presence(members.size))
+                onEvent(Event.Members(members.toSet()))
             }
 
             "pusher_internal:member_removed" -> {
                 val id = JSONObject(message.getString("data")).optString("user_id")
                 if (id.isNotEmpty()) members.remove(id)
                 onEvent(Event.Presence(members.size))
+                onEvent(Event.Members(members.toSet()))
             }
 
             "ReactionSent" -> {
@@ -175,11 +205,31 @@ class SyncSocket(
                     ),
                 )
             }
+
+            else -> {
+                // Signalisation voix : client events `client-voice-<type>` relayés par Reverb. Le
+                // payload arrive soit en objet, soit en chaîne JSON encodée selon le relais → on gère
+                // les deux. `<type>` ∈ {offer, answer, ice, talk}.
+                val event = message.optString("event")
+                if (event.startsWith(CLIENT_VOICE_PREFIX)) {
+                    val type = event.removePrefix(CLIENT_VOICE_PREFIX)
+                    val raw = message.opt("data")
+                    val payload = when (raw) {
+                        is JSONObject -> raw
+                        is String -> runCatching { JSONObject(raw) }.getOrNull()
+                        else -> null
+                    }
+                    if (payload != null) onEvent(Event.VoiceSignal(type, payload))
+                }
+            }
         }
     }
 
     companion object {
-        private const val RECONNECT_DELAY_MS = 2000L
+        private const val BASE_RECONNECT_MS = 1000L   // délai de base (doublé à chaque échec consécutif)
+        private const val MAX_RECONNECT_MS = 16000L   // plafond du backoff
+        private const val JITTER_MS = 1000L           // aléa ajouté (désynchronise les deux clients)
+        private const val CLIENT_VOICE_PREFIX = "client-voice-"
 
         /**
          * Client par défaut avec **ping WebSocket automatique** (20 s) : maintient la connexion

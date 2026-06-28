@@ -71,6 +71,9 @@ dependencies {
     // Affiches TMDB (catalogue / watchlist) — chargement d'images async en Compose.
     implementation(libs.coil.compose)
 
+    // Voice chat push-to-talk (WebRTC P2P, signalisation sur le canal de présence Reverb).
+    implementation(libs.webrtc)
+
     testImplementation(libs.junit)
 
     debugImplementation(libs.androidx.ui.tooling)

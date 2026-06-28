@@ -1,5 +1,6 @@
 package com.syncflix.app.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -133,6 +134,31 @@ fun SettingsScreen(onBack: () -> Unit) {
                 checked = settings.showDebug,
                 onCheckedChange = SettingsStore::setShowDebug,
             )
+
+            // --- Voice chat ---
+            Spacer(Modifier.height(20.dp))
+            SectionHeader(stringResource(R.string.settings_section_voice))
+            SettingSwitch(
+                label = stringResource(R.string.settings_voice_enabled),
+                checked = settings.voiceEnabled,
+                onCheckedChange = SettingsStore::setVoiceEnabled,
+            )
+            // Apparition animée du sous-réglage (charte : pas d'apparition sèche du contenu conditionnel).
+            AnimatedVisibility(visible = settings.voiceEnabled) {
+                Column {
+                    SettingSwitch(
+                        label = stringResource(R.string.settings_voice_ptt),
+                        checked = settings.voicePushToTalk,
+                        onCheckedChange = SettingsStore::setVoicePushToTalk,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_voice_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+                    )
+                }
+            }
 
             // --- Réactions ---
             Spacer(Modifier.height(20.dp))

@@ -85,7 +85,14 @@ remplis en matchant `prettyTitle` au 1er résultat TMDB lors du scan → affiche
 
 ---
 
-## 2. Voice chat — WebRTC + Push-to-talk  *(le plus lourd)*
+## 2. Voice chat — WebRTC + Push-to-talk  *(✅ IMPLÉMENTÉ v1, 2026-06-28)*
+
+> **État v1** : implémenté sauf le service de premier plan micro (la voix tourne tant que le lecteur
+> est au 1er plan — suffisant pour le co-visionnage). Détails : `VoiceChatManager` (domain/voice),
+> signalisation via `SyncSocket.sendClient` / `Event.VoiceSignal` (client events `client-voice-*`),
+> bouton PTT + ducking + indicateur dans `PlayerScreen`, réglages dans `SettingsStore`/`SettingsScreen`.
+> Reverb : `accept_client_events_from = members` autorisait déjà les client events → **aucune modif serveur**.
+
 
 ### 2.1 Techno
 - **WebRTC** (fork maintenu **`stream-webrtc-android`**) : capture micro, **Opus**, jitter buffer,

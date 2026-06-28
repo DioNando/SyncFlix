@@ -8,3 +8,7 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# --- WebRTC (voice chat) : JNI + réflexion → ne pas obfusquer/élaguer le pont natif --------------
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**

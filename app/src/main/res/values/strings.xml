@@ -17,6 +17,10 @@
     <string name="settings_show_title">Afficher le titre du film</string>
     <string name="settings_show_reactions">Afficher les réactions</string>
     <string name="settings_show_debug">Afficher la dérive (debug)</string>
+    <string name="settings_section_voice">Voix</string>
+    <string name="settings_voice_enabled">Activer le chat vocal</string>
+    <string name="settings_voice_ptt">Appuyer pour parler (push-to-talk)</string>
+    <string name="settings_voice_hint">Désactivé : micro ouvert (le bouton coupe/active le micro). Le volume du film baisse quand l\'un de vous parle.</string>
     <string name="settings_section_reactions">Réactions</string>
     <string name="settings_reactions_label">Tes emojis (un par case, 6 max)</string>
     <string name="settings_reactions_reset">Réinitialiser</string>
@@ -67,12 +71,18 @@
     <string name="player_partner_disconnected">Partenaire déconnecté</string>
     <string name="player_partner_gone">Ton/ta partenaire s\'est déconnecté·e</string>
     <string name="player_partner_gone_named">%1$s s\'est déconnecté·e</string>
+
+    <!-- Voice chat -->
+    <string name="voice_partner_talking">Ton/ta partenaire parle…</string>
+    <string name="voice_partner_talking_named">%1$s parle…</string>
     <string name="player_partner_back">Ton/ta partenaire est de retour</string>
     <string name="player_partner_back_named">%1$s est de retour</string>
     <string name="player_drift">Δ %1$d ms</string>
 
     <!-- Descriptions d\'accessibilité (TalkBack) -->
     <string name="cd_back">Retour</string>
+    <string name="cd_brightness">Luminosité</string>
+    <string name="cd_volume">Volume</string>
     <string name="cd_play">Lecture</string>
     <string name="cd_pause">Pause</string>
     <string name="cd_seek_back">Reculer de 10 secondes</string>
@@ -84,6 +94,11 @@
     <string name="cd_unlock">Déverrouiller l\'écran</string>
     <string name="cd_share">Partager le code</string>
     <string name="cd_remove">Retirer de la liste</string>
+    <string name="cd_voice_hold">Maintenir pour parler</string>
+    <string name="cd_voice_mute">Couper le micro</string>
+    <string name="cd_voice_unmute">Activer le micro</string>
+    <string name="cd_open_detail">Voir la fiche</string>
+    <string name="cd_mark_watched">Marquer comme vu</string>
 
     <!-- Catalogue TMDB : recherche de films -->
     <string name="search_title">Rechercher un film</string>

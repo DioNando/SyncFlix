@@ -1,5 +1,6 @@
 package com.syncflix.app.ui.catalog
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -75,33 +78,46 @@ fun WatchlistScreen(
             )
         },
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-            val current = items
-            when {
-                error -> StatusText(stringResource(R.string.watchlist_error))
-                current == null -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                current.isEmpty() -> StatusText(stringResource(R.string.watchlist_empty))
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(current, key = { it.id }) { item ->
-                        WishRow(
-                            item = item,
-                            onWatchedChange = { watched ->
-                                scope.launch {
-                                    runCatching { api.setWatched(server, item.id, watched) }
-                                        .onSuccess { updated -> items = items?.map { if (it.id == updated.id) updated else it } }
-                                }
-                            },
-                            onRemove = {
-                                scope.launch {
-                                    runCatching { api.remove(server, item.id) }
-                                        .onSuccess { items = items?.filterNot { it.id == item.id } }
-                                }
-                            },
-                        )
+        // État affiché en fondu ; les lignes apparaissent/disparaissent avec une animation de placement.
+        val phase = when {
+            error -> "error"
+            items == null -> "loading"
+            items?.isEmpty() == true -> "empty"
+            else -> "list"
+        }
+        Crossfade(
+            targetState = phase,
+            label = "watchlist-state",
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+        ) { p ->
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                when (p) {
+                    "error" -> StatusText(stringResource(R.string.watchlist_error))
+                    "loading" -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    "empty" -> StatusText(stringResource(R.string.watchlist_empty))
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(items.orEmpty(), key = { it.id }) { item ->
+                            WishRow(
+                                item = item,
+                                modifier = Modifier.animateItem(),
+                                onWatchedChange = { watched ->
+                                    scope.launch {
+                                        runCatching { api.setWatched(server, item.id, watched) }
+                                            .onSuccess { updated -> items = items?.map { if (it.id == updated.id) updated else it } }
+                                    }
+                                },
+                                onRemove = {
+                                    scope.launch {
+                                        runCatching { api.remove(server, item.id) }
+                                            .onSuccess { items = items?.filterNot { it.id == item.id } }
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -114,11 +130,12 @@ private fun WishRow(
     item: WishlistItem,
     onWatchedChange: (Boolean) -> Unit,
     onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         shape = SyncFlixFieldShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             MoviePoster(
@@ -139,7 +156,12 @@ private fun WishRow(
                 Spacer(Modifier.height(4.dp))
                 AvailabilityBadge(available = item.available)
             }
-            Checkbox(checked = item.watched, onCheckedChange = onWatchedChange)
+            val watchedLabel = stringResource(R.string.cd_mark_watched)
+            Checkbox(
+                checked = item.watched,
+                onCheckedChange = onWatchedChange,
+                modifier = Modifier.semantics { contentDescription = watchedLabel },
+            )
             IconButton(onClick = onRemove) {
                 Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.cd_remove))
             }

@@ -17,6 +17,10 @@
     <string name="settings_show_title">Show movie title</string>
     <string name="settings_show_reactions">Show reactions</string>
     <string name="settings_show_debug">Show drift (debug)</string>
+    <string name="settings_section_voice">Voice</string>
+    <string name="settings_voice_enabled">Enable voice chat</string>
+    <string name="settings_voice_ptt">Push to talk</string>
+    <string name="settings_voice_hint">Off: open mic (the button mutes/unmutes). The movie volume lowers while either of you is talking.</string>
     <string name="settings_section_reactions">Reactions</string>
     <string name="settings_reactions_label">Your emojis (one per box, max 6)</string>
     <string name="settings_reactions_reset">Reset</string>
@@ -69,10 +73,16 @@
     <string name="player_partner_gone_named">%1$s disconnected</string>
     <string name="player_partner_back">Your partner is back</string>
     <string name="player_partner_back_named">%1$s is back</string>
+
+    <!-- Voice chat -->
+    <string name="voice_partner_talking">Your partner is talking…</string>
+    <string name="voice_partner_talking_named">%1$s is talking…</string>
     <string name="player_drift">Δ %1$d ms</string>
 
     <!-- Accessibility descriptions (TalkBack) -->
     <string name="cd_back">Back</string>
+    <string name="cd_brightness">Brightness</string>
+    <string name="cd_volume">Volume</string>
     <string name="cd_play">Play</string>
     <string name="cd_pause">Pause</string>
     <string name="cd_seek_back">Rewind 10 seconds</string>
@@ -84,6 +94,11 @@
     <string name="cd_unlock">Unlock screen</string>
     <string name="cd_share">Share the code</string>
     <string name="cd_remove">Remove from list</string>
+    <string name="cd_voice_hold">Hold to talk</string>
+    <string name="cd_voice_mute">Mute mic</string>
+    <string name="cd_voice_unmute">Unmute mic</string>
+    <string name="cd_open_detail">View details</string>
+    <string name="cd_mark_watched">Mark as watched</string>
 
     <!-- TMDB catalog: movie search -->
     <string name="search_title">Search for a movie</string>

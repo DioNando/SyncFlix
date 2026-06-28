@@ -1,0 +1,23 @@
+# Relais TURN/STUN pour le voice chat Miray.
+#
+# Lancement :   cd server/turn && docker compose up -d
+# Logs :        docker compose logs -f
+# Arrêt :       docker compose down
+#
+# Les ports sont publiés sur toutes les interfaces de l'hôte (0.0.0.0), y compris l'IP Tailscale
+# 100.104.159.28 → les deux téléphones joignent le TURN via Tailscale.
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: miray-coturn
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49200:49160-49200/udp"
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    # ⚠️ Override la commande par défaut de l'image : celle-ci injecte `--external-ip=<IP publique
+    # auto-détectée>`, ce qui (a) entre en conflit avec notre external-ip et (b) annoncerait une IP
+    # publique non joignable. On force l'usage de NOTRE seule config (external-ip = IP Tailscale).
+    command: ["-c", "/etc/coturn/turnserver.conf"]

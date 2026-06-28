@@ -46,10 +46,21 @@ class PlaybackSyncManager(
     private var syncJob: Job? = null
     private var currentSpeed = 1f
 
+    // « Attendre celui qui bufferise » : quand on stalle en pleine lecture, on demande au partenaire
+    // de se mettre en pause ; on repart ensemble à la reprise. [stalled] = on a émis cette pause.
+    private var stalled = false
+    private var stallJob: Job? = null
+    private var everReady = false  // on n'arme le stall qu'après une 1re lecture (pas au chargement initial)
+
     private val listener = object : Player.Listener {
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             // Une mutation programmatique a le même `reason` (USER_REQUEST) qu'un tap UI :
             // on distingue via la fenêtre de suppression, pas via le reason.
+            // Une pause (utilisateur ou distante) supersède un éventuel état de stall en cours.
+            if (!playWhenReady) {
+                stalled = false
+                stallJob?.cancel()
+            }
             maybeEmit()
         }
 
@@ -59,6 +70,14 @@ class PlaybackSyncManager(
             reason: Int,
         ) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK) maybeEmit()
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            when (playbackState) {
+                Player.STATE_READY -> { everReady = true; onStallEnd() }
+                Player.STATE_BUFFERING -> if (everReady) onMaybeStallStart()
+                else -> Unit
+            }
         }
     }
 
@@ -79,6 +98,49 @@ class PlaybackSyncManager(
         player.removeListener(listener)
         syncJob?.cancel()
         syncJob = null
+        stallJob?.cancel()
+        stallJob = null
+    }
+
+    /**
+     * Stall réseau détecté (on bufferise alors qu'on voulait lire) : après un court anti-rebond
+     * (ignore les micro-coupures), on demande au partenaire de **se mettre en pause** le temps qu'on
+     * recharge. On note [stalled] pour que la boucle de contrôle cesse d'avancer pendant ce temps.
+     */
+    private fun onMaybeStallStart() {
+        if (stalled || !player.playWhenReady) return                  // pas en lecture voulue → ignore
+        if (SystemClock.uptimeMillis() < suppressEmitUntil) return    // (re)calage programmatique en cours
+        stallJob?.cancel()
+        stallJob = scope.launch {
+            delay(STALL_DEBOUNCE_MS)
+            if (!isActive) return@launch
+            // Toujours en train de bufferiser en voulant lire ? → on fige le partenaire.
+            if (player.playbackState == Player.STATE_BUFFERING && player.playWhenReady) {
+                stalled = true
+                emitNow(isPlaying = false)
+            }
+        }
+    }
+
+    /** Reprise après stall : on annule l'anti-rebond et, si on avait figé le partenaire, on repart. */
+    private fun onStallEnd() {
+        stallJob?.cancel()
+        stallJob = null
+        if (stalled) {
+            stalled = false
+            emitNow(isPlaying = true)
+        }
+    }
+
+    /** Émet un état explicite (position live), avec réessais — pour les transitions de stall. */
+    private fun emitNow(isPlaying: Boolean) {
+        scope.launch {
+            repeat(EMIT_ATTEMPTS) { attempt ->
+                val pos = player.currentPosition.coerceAtLeast(0)
+                if (runCatching { onEmit(isPlaying, pos) }.isSuccess) return@launch
+                if (attempt < EMIT_ATTEMPTS - 1) delay(EMIT_RETRY_MS)
+            }
+        }
     }
 
     /** Cale le lecteur sur l'état initial de la session (sans retour visuel : ce n'est pas l'autre). */
@@ -88,8 +150,13 @@ class PlaybackSyncManager(
         reconcile(state)
     }
 
-    /** Applique un état reçu du canal : filtre l'écho et le désordre, puis réconcilie. */
-    fun applyRemote(state: VideoState) {
+    /**
+     * Applique un état reçu du canal : filtre l'écho et le désordre, puis réconcilie.
+     *
+     * [notify] = false pour une resynchronisation **silencieuse** (filet de sécurité par poll de
+     * `GET /state`) : on réaligne sans afficher le retour « l'autre a joué/mis en pause ».
+     */
+    fun applyRemote(state: VideoState, notify: Boolean = true) {
         if (state.triggeredBy == clientId) {              // notre propre écho
             lastAppliedSeq = maxOf(lastAppliedSeq, state.seq)
             return
@@ -98,28 +165,45 @@ class PlaybackSyncManager(
         lastAppliedSeq = state.seq
         lastRemote = state
         reconcile(state)
-        onRemoteApplied(state)  // retour visuel : action déclenchée par l'autre personne
+        if (notify) onRemoteApplied(state)  // retour visuel : action déclenchée par l'autre personne
     }
 
     private fun maybeEmit() {
         if (SystemClock.uptimeMillis() < suppressEmitUntil) return  // changement d'origine distante
-        val playing = player.playWhenReady
-        val pos = player.currentPosition.coerceAtLeast(0)
-        scope.launch { runCatching { onEmit(playing, pos) } }
+        // Réessaie en cas d'échec réseau transitoire (sinon une action play/pause/seek serait perdue
+        // jusqu'au prochain event). On relit l'état LIVE à chaque tentative → on émet toujours la
+        // vérité actuelle (jamais un état périmé qui réordonnancerait côté serveur).
+        scope.launch {
+            repeat(EMIT_ATTEMPTS) { attempt ->
+                val playing = player.playWhenReady
+                val pos = player.currentPosition.coerceAtLeast(0)
+                if (runCatching { onEmit(playing, pos) }.isSuccess) return@launch
+                if (attempt < EMIT_ATTEMPTS - 1) delay(EMIT_RETRY_MS)
+            }
+        }
     }
 
     private fun reconcile(state: VideoState) {
+        val wasPlaying = player.playWhenReady
         if (player.playWhenReady != state.isPlaying) {
             suppressEmitUntil = SystemClock.uptimeMillis() + SUPPRESS_MS
             player.playWhenReady = state.isPlaying
         }
-        val diff = targetPosition(state) - player.currentPosition
+        val target = targetPosition(state)
+        val diff = target - player.currentPosition
         when {
             // En pause : alignement à l'image près (un saut n'est pas gênant, vidéo arrêtée).
-            !state.isPlaying -> if (abs(diff) > PAUSE_SEEK_MS) hardSeek(targetPosition(state))
-            // En lecture : seul un gros écart (seek volontaire) justifie un saut ; le reste est
-            // rattrapé en douceur par la boucle de contrôle (correction de vitesse).
-            abs(diff) > BIG_SEEK_MS -> hardSeek(targetPosition(state))
+            !state.isPlaying -> if (abs(diff) > PAUSE_SEEK_MS) hardSeek(target)
+            // **Transition pause→play** : on aligne précisément tout de suite. Sinon on démarre avec
+            // le retard de latence réseau (~200-300 ms) que la boucle de vitesse mettrait plusieurs
+            // secondes à résorber. Le saut est imperceptible (les deux sont sur la même image figée).
+            // **Lead** : ici on *saute* puis on démarre, alors que l'autre côté ne fait que reprendre
+            // (pas de seek) → le re-décodage du saut nous fait atterrir un poil en retard. On vise
+            // donc légèrement en avant pour compenser ce coût de démarrage du décodeur.
+            !wasPlaying -> if (abs(diff) > PLAY_ALIGN_MS) hardSeek(target + PLAY_START_LEAD_MS)
+            // En lecture établie : seul un gros écart (seek volontaire) justifie un saut ; le reste
+            // est rattrapé en douceur par la boucle de contrôle (correction de vitesse).
+            abs(diff) > BIG_SEEK_MS -> hardSeek(target)
         }
     }
 
@@ -132,8 +216,10 @@ class PlaybackSyncManager(
      */
     private fun syncTick() {
         val state = lastRemote
-        if (state == null || !state.isPlaying || !player.playWhenReady) {
-            setSpeed(1f)  // en pause / pas d'état distant : pas de correction
+        // Pendant notre propre stall, on a demandé au partenaire d'attendre : ne pas se rattraper
+        // vers une position qui avance encore (sinon on sauterait en avant à la reprise).
+        if (state == null || stalled || !state.isPlaying || !player.playWhenReady) {
+            setSpeed(1f)  // en pause / stall / pas d'état distant : pas de correction
             onDrift(0L)
             return
         }
@@ -173,6 +259,8 @@ class PlaybackSyncManager(
 
     companion object {
         private const val PAUSE_SEEK_MS = 150L      // pause : alignement quasi exact (même image)
+        private const val PLAY_ALIGN_MS = 80L       // play : saut d'alignement immédiat au-delà (tue le pic de latence)
+        private const val PLAY_START_LEAD_MS = 50L  // play : avance la cible du saut pour compenser le coût de démarrage du décodeur
         private const val DEADBAND_MS = 120L        // en deçà : considéré synchronisé (vitesse normale)
         private const val BIG_SEEK_MS = 1500L       // au-delà : saut franc (rattrapage en vitesse trop long)
         private const val MAX_RATE = 0.08f          // correction de vitesse plafonnée à ±8 %
@@ -180,5 +268,8 @@ class PlaybackSyncManager(
         private const val SYNC_TICK_MS = 500L       // cadence de la boucle de contrôle
         private const val SUPPRESS_MS = 800L        // fenêtre anti-boucle après une mutation
         private const val BOOTSTRAP_SUPPRESS_MS = 1500L // anti-émission au démarrage de l'écran
+        private const val EMIT_ATTEMPTS = 3         // tentatives d'émission (résilience réseau)
+        private const val EMIT_RETRY_MS = 400L      // délai entre deux tentatives d'émission
+        private const val STALL_DEBOUNCE_MS = 1500L // stall plus long que ça → on fige le partenaire
     }
 }

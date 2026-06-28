@@ -1,5 +1,6 @@
 package com.syncflix.app.ui.catalog
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,33 +118,51 @@ fun SearchScreen(
                 colors = syncflixFieldColors(),
             )
 
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                when {
-                    loading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    error -> StatusText(stringResource(R.string.search_error))
-                    query.isBlank() -> StatusText(stringResource(R.string.search_hint))
-                    results.isEmpty() -> StatusText(stringResource(R.string.search_empty))
-                    else -> LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(results, key = { it.tmdbId }) { movie ->
-                            Column(modifier = Modifier.clickable { selected = movie }) {
-                                MoviePoster(
-                                    posterUrl = movie.posterUrl,
-                                    contentDescription = movie.title,
-                                    modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
-                                )
-                                Text(
-                                    text = movie.title,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
+            // État affiché en fondu (Crossfade) : pas de saut sec entre chargement / vide / résultats.
+            val phase = when {
+                loading -> "loading"
+                error -> "error"
+                query.isBlank() -> "hint"
+                results.isEmpty() -> "empty"
+                else -> "results"
+            }
+            Crossfade(targetState = phase, label = "search-state", modifier = Modifier.fillMaxSize()) { p ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    when (p) {
+                        "loading" -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        "error" -> StatusText(stringResource(R.string.search_error))
+                        "hint" -> StatusText(stringResource(R.string.search_hint))
+                        "empty" -> StatusText(stringResource(R.string.search_empty))
+                        else -> LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(results, key = { it.tmdbId }) { movie ->
+                                // Carte tappable : libellé d'action + fusion des descendants → TalkBack
+                                // lit « <titre>, voir la fiche » en un seul élément focusable.
+                                Column(
+                                    modifier = Modifier
+                                        .clickable(onClickLabel = stringResource(R.string.cd_open_detail)) {
+                                            selected = movie
+                                        }
+                                        .semantics(mergeDescendants = true) {},
+                                ) {
+                                    MoviePoster(
+                                        posterUrl = movie.posterUrl,
+                                        contentDescription = movie.title,
+                                        modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+                                    )
+                                    Text(
+                                        text = movie.title,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
                             }
                         }
                     }

@@ -18,6 +18,10 @@ data class MiraySettings(
     val showMovieTitle: Boolean = true,
     /** Jeu d'emojis proposés dans la barre de réactions. */
     val reactions: List<String> = SettingsStore.DEFAULT_REACTIONS,
+    /** Active le voice chat dans le lecteur (nécessite la permission micro). */
+    val voiceEnabled: Boolean = false,
+    /** true = push-to-talk (maintenir pour parler) ; false = micro ouvert (bouton = muet/parler). */
+    val voicePushToTalk: Boolean = true,
     /** Affiche la dérive de synchro en surimpression (diagnostic). */
     val showDebug: Boolean = false,
 )
@@ -38,6 +42,8 @@ object SettingsStore {
     private const val KEY_SHOW_REACTIONS = "show_reactions"
     private const val KEY_SHOW_TITLE = "show_movie_title"
     private const val KEY_REACTIONS = "reactions"
+    private const val KEY_VOICE_ENABLED = "voice_enabled"
+    private const val KEY_VOICE_PTT = "voice_push_to_talk"
     private const val KEY_SHOW_DEBUG = "show_debug"
 
     private lateinit var prefs: SharedPreferences
@@ -56,6 +62,8 @@ object SettingsStore {
             reactions = prefs.getString(KEY_REACTIONS, null)
                 ?.split(" ")?.filter { it.isNotBlank() }
                 ?.ifEmpty { DEFAULT_REACTIONS } ?: DEFAULT_REACTIONS,
+            voiceEnabled = prefs.getBoolean(KEY_VOICE_ENABLED, false),
+            voicePushToTalk = prefs.getBoolean(KEY_VOICE_PTT, true),
             showDebug = prefs.getBoolean(KEY_SHOW_DEBUG, false),
         )
     }
@@ -64,6 +72,8 @@ object SettingsStore {
     fun setPartnerName(value: String) = update { it.copy(partnerName = value.trim()) }
     fun setShowReactions(value: Boolean) = update { it.copy(showReactions = value) }
     fun setShowMovieTitle(value: Boolean) = update { it.copy(showMovieTitle = value) }
+    fun setVoiceEnabled(value: Boolean) = update { it.copy(voiceEnabled = value) }
+    fun setVoicePushToTalk(value: Boolean) = update { it.copy(voicePushToTalk = value) }
     fun setShowDebug(value: Boolean) = update { it.copy(showDebug = value) }
 
     /** Nombre maximum d'emojis dans la barre de réactions. */
@@ -84,6 +94,8 @@ object SettingsStore {
             .putBoolean(KEY_SHOW_REACTIONS, next.showReactions)
             .putBoolean(KEY_SHOW_TITLE, next.showMovieTitle)
             .putString(KEY_REACTIONS, next.reactions.joinToString(" "))
+            .putBoolean(KEY_VOICE_ENABLED, next.voiceEnabled)
+            .putBoolean(KEY_VOICE_PTT, next.voicePushToTalk)
             .putBoolean(KEY_SHOW_DEBUG, next.showDebug)
             .apply()
     }
