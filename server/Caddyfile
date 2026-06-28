@@ -19,10 +19,12 @@
 }
 
 :8088 {
-	# Streaming vidéo : sert directement les fichiers de storage/app/private/movies (Range natif,
-	# multi-thread). `handle_path` retire le préfixe /media → /media/sintel.mp4 = movies/sintel.mp4.
+	# Streaming vidéo : sert les liens « propres » id.ext créés par `movies:scan` (Range natif,
+	# multi-thread). On sert depuis storage/app/private/media (liens) et NON movies/ : l'URL ne
+	# contient ainsi que /media/{id}.{ext} → aucun caractère spécial (les crochets/parenthèses des
+	# noms de release faisaient échouer Caddy en 404).
 	handle_path /media/* {
-		root * storage/app/private/movies
+		root * storage/app/private/media
 		file_server
 	}
 

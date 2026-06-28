@@ -48,6 +48,8 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
@@ -197,6 +199,8 @@ fun PlayerScreen(
     val clientId = remember { UUID.randomUUID().toString() }
     // Offset d'horloge mobile↔serveur, mesuré en HTTP au démarrage (0 en attendant).
     var clockOffset by remember { mutableStateOf(0L) }
+    // Dérive de synchro estimée (ms, signée) — affichée si le mode debug est activé.
+    var drift by remember { mutableStateOf(0L) }
 
     // --- Salon d'attente + réactions ---------------------------------------------------------------
     var peers by remember { mutableStateOf(1) }           // spectateurs connectés (présence)
@@ -207,6 +211,14 @@ fun PlayerScreen(
     val showLobby = !USE_TEST_STREAM && !startedTogether && !lobbyBypassed && peers < 2
     val reactions = remember { mutableStateListOf<FloatingReaction>() }
     var reactionSeq by remember { mutableStateOf(0L) }
+    // Notice transitoire quand le partenaire se dé/reconnecte (true = de retour, false = parti).
+    var partnerNotice by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(partnerNotice) {
+        if (partnerNotice != null) {
+            kotlinx.coroutines.delay(3500)
+            partnerNotice = null
+        }
+    }
 
     // --- Réglages + état d'écran -------------------------------------------------------------------
     val settings = SettingsStore.settings
@@ -276,7 +288,18 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                errorText = "${error.errorCodeName}\n${error.message ?: ""}"
+                // Message clair selon la nature : décodage (format non supporté, ex. HEVC 10-bit)
+                // vs réseau/source. Le code technique est gardé en petit pour le diagnostic.
+                val friendlyRes = when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+                    PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+                    PlaybackException.ERROR_CODE_DECODING_FAILED,
+                    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+                    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ->
+                        R.string.player_error_codec
+                    else -> R.string.player_error_network
+                }
+                errorText = "${context.getString(friendlyRes)}\n(${error.errorCodeName})"
             }
         }
         exoPlayer.addListener(listener)
@@ -309,6 +332,7 @@ fun PlayerScreen(
                 sessionApi.updateState(session.serverUrl, session.code, playing, pos, clientId)
             },
             onRemoteApplied = { remoteHint = it },
+            onDrift = { drift = it },
         )
     }
     // Efface le retour visuel d'action distante après un court instant.
@@ -371,8 +395,14 @@ fun PlayerScreen(
                     }
                     is SyncSocket.Event.State -> syncManager.applyRemote(event.state)
                     is SyncSocket.Event.Presence -> {
+                        val was = peers
                         peers = event.count
                         if (event.count >= 2) startedTogether = true
+                        // Notice seulement après le démarrage à deux (pas au 1er abonnement).
+                        if (startedTogether) {
+                            if (was >= 2 && event.count < 2) partnerNotice = false       // parti
+                            else if (was < 2 && event.count >= 2) partnerNotice = true    // de retour
+                        }
                     }
                     is SyncSocket.Event.Reaction ->
                         // Lecture live du réglage (le lambda survit aux changements de réglage).
@@ -528,7 +558,18 @@ fun PlayerScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                // Verrouiller l'écran (anti-touche pendant le visionnage).
+                // Indicateurs groupés : présence du partenaire (vert = connecté, grisé = déconnecté)
+                // puis pastille d'état de synchro (vert/ambre/rouge).
+                Icon(
+                    imageVector = if (peers >= 2) Icons.Rounded.Person else Icons.Rounded.PersonOff,
+                    contentDescription = stringResource(
+                        if (peers >= 2) R.string.player_partner_connected else R.string.player_partner_disconnected,
+                    ),
+                    tint = if (peers >= 2) Color(0xFF34C759) else Color.White.copy(alpha = 0.45f),
+                    modifier = Modifier.padding(end = 8.dp).size(20.dp),
+                )
+                SyncStatusDot(status)
+                // Verrouiller l'écran (action, à l'extrémité du bandeau).
                 IconButton(onClick = { locked = true }) {
                     Icon(
                         imageVector = Icons.Rounded.Lock,
@@ -536,9 +577,43 @@ fun PlayerScreen(
                         tint = Color.White,
                     )
                 }
-                // Pastille d'état (la 1re version affichait « Synchronisé » qui se cassait en
-                // vertical dans le bandeau étroit) : vert = synchro, ambre = connexion, rouge = hors ligne.
-                SyncStatusDot(status)
+            }
+        }
+
+        // Notice transitoire de présence : le partenaire vient de se dé/reconnecter. Visible même
+        // sans toucher l'écran (pas conditionnée aux contrôles) → on sait s'il est là ou pas.
+        partnerNotice?.let { back ->
+            val name = settings.partnerName
+            val text = when {
+                back && name.isNotBlank() -> stringResource(R.string.player_partner_back_named, name)
+                back -> stringResource(R.string.player_partner_back)
+                name.isNotBlank() -> stringResource(R.string.player_partner_gone_named, name)
+                else -> stringResource(R.string.player_partner_gone)
+            }
+            Surface(
+                color = if (back) MaterialTheme.colorScheme.primaryContainer else Color.Black.copy(alpha = 0.7f),
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 110.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = if (back) Icons.Rounded.Person else Icons.Rounded.PersonOff,
+                        contentDescription = null,
+                        tint = if (back) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                    )
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (back) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                    )
+                }
             }
         }
 
@@ -579,6 +654,44 @@ fun PlayerScreen(
                         color = Color.White,
                     )
                 }
+            }
+        }
+
+        // Diagnostic : dérive de synchro estimée (mode debug, activable dans les réglages).
+        if (settings.showDebug && !showLobby) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.5f),
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 8.dp, top = 56.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.player_drift, drift),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+
+        // Connexion perdue : bannière de reconnexion (le WebSocket retente automatiquement).
+        if (status == SyncStatus.Offline && !showLobby && !locked) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 64.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.player_reconnecting),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
             }
         }
 
@@ -744,7 +857,7 @@ private fun BoxScope.LobbyOverlay(
             horizontalArrangement = Arrangement.spacedBy(32.dp),
         ) {
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                LobbyInfo(movieTitle)
+                LobbyInfo(movieTitle, partnerName)
             }
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 LobbyActions(code, peers, partnerName, onCopy, onShare, onEnterAlone)
@@ -756,7 +869,7 @@ private fun BoxScope.LobbyOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            LobbyInfo(movieTitle)
+            LobbyInfo(movieTitle, partnerName)
             Spacer(Modifier.height(28.dp))
             LobbyActions(code, peers, partnerName, onCopy, onShare, onEnterAlone)
         }
@@ -765,7 +878,7 @@ private fun BoxScope.LobbyOverlay(
 
 /** Bloc « infos » du salon : pastille film + titre + nom du film + invitation. */
 @Composable
-private fun LobbyInfo(movieTitle: String) {
+private fun LobbyInfo(movieTitle: String, partnerName: String) {
     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(64.dp)) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
@@ -792,7 +905,11 @@ private fun LobbyInfo(movieTitle: String) {
     )
     Spacer(Modifier.height(4.dp))
     Text(
-        text = stringResource(R.string.lobby_hint),
+        text = if (partnerName.isNotBlank()) {
+            stringResource(R.string.lobby_hint_named, partnerName)
+        } else {
+            stringResource(R.string.lobby_hint)
+        },
         style = MaterialTheme.typography.bodyMedium,
         color = Color.White.copy(alpha = 0.7f),
         textAlign = TextAlign.Center,

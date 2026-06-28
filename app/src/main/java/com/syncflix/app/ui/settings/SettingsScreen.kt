@@ -128,6 +128,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                 checked = settings.showReactions,
                 onCheckedChange = SettingsStore::setShowReactions,
             )
+            SettingSwitch(
+                label = stringResource(R.string.settings_show_debug),
+                checked = settings.showDebug,
+                onCheckedChange = SettingsStore::setShowDebug,
+            )
 
             // --- Réactions ---
             Spacer(Modifier.height(20.dp))

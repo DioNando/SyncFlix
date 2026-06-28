@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,7 @@ fun PairingScreen(
     onConnect: (SessionState) -> Unit,
     onPickMovie: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSearch: (String) -> Unit,
 ) {
     val api = remember { SessionApi() }
     val scope = rememberCoroutineScope()
@@ -111,11 +113,23 @@ fun PairingScreen(
         if (!serverError && !codeError) run(onSuccess = onConnect) { api.join(server, code) }
     }
 
+    // Catalogue/watchlist : nécessite l'adresse serveur (appels au proxy TMDB).
+    fun openSearch() {
+        serverError = server.isBlank()
+        if (!serverError) onOpenSearch(server)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {},
                 actions = {
+                    IconButton(onClick = ::openSearch) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = stringResource(R.string.search_title),
+                        )
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(
                             imageVector = Icons.Rounded.Settings,

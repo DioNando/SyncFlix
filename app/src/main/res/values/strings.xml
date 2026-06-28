@@ -16,6 +16,7 @@
     <string name="settings_section_player">Lecteur</string>
     <string name="settings_show_title">Afficher le titre du film</string>
     <string name="settings_show_reactions">Afficher les réactions</string>
+    <string name="settings_show_debug">Afficher la dérive (debug)</string>
     <string name="settings_section_reactions">Réactions</string>
     <string name="settings_reactions_label">Tes emojis (un par case, 6 max)</string>
     <string name="settings_reactions_reset">Réinitialiser</string>
@@ -41,6 +42,7 @@
     <!-- Salon d\'attente -->
     <string name="lobby_title">Salon d\'attente</string>
     <string name="lobby_hint">Partage ce code avec l\'autre personne pour regarder ensemble.</string>
+    <string name="lobby_hint_named">Partage ce code avec %1$s pour regarder ensemble.</string>
     <string name="lobby_waiting">En attente de ton/ta partenaire… (%1$d/2)</string>
     <string name="lobby_waiting_named">En attente de %1$s… (%2$d/2)</string>
     <string name="lobby_enter_alone">Entrer seul·e</string>
@@ -58,6 +60,16 @@
     <string name="player_quit_title">Quitter la session ?</string>
     <string name="player_quit_message">Tu vas quitter le visionnage partagé.</string>
     <string name="player_quit_confirm">Quitter</string>
+    <string name="player_reconnecting">Connexion perdue, reconnexion…</string>
+    <string name="player_error_codec">Format vidéo non supporté par cet appareil (ex. HEVC 10-bit). Essaie un autre fichier, ou ré-encode-le en H.264 8-bit.</string>
+    <string name="player_error_network">Impossible de lire le flux. Vérifie la connexion au serveur.</string>
+    <string name="player_partner_connected">Partenaire connecté</string>
+    <string name="player_partner_disconnected">Partenaire déconnecté</string>
+    <string name="player_partner_gone">Ton/ta partenaire s\'est déconnecté·e</string>
+    <string name="player_partner_gone_named">%1$s s\'est déconnecté·e</string>
+    <string name="player_partner_back">Ton/ta partenaire est de retour</string>
+    <string name="player_partner_back_named">%1$s est de retour</string>
+    <string name="player_drift">Δ %1$d ms</string>
 
     <!-- Descriptions d\'accessibilité (TalkBack) -->
     <string name="cd_back">Retour</string>
@@ -71,4 +83,22 @@
     <string name="cd_lock">Verrouiller l\'écran</string>
     <string name="cd_unlock">Déverrouiller l\'écran</string>
     <string name="cd_share">Partager le code</string>
+    <string name="cd_remove">Retirer de la liste</string>
+
+    <!-- Catalogue TMDB : recherche de films -->
+    <string name="search_title">Rechercher un film</string>
+    <string name="search_field_label">Titre du film</string>
+    <string name="search_hint">Cherche un film pour voir sa fiche et l\'ajouter à ta liste.</string>
+    <string name="search_empty">Aucun résultat pour cette recherche.</string>
+    <string name="search_error">Impossible de joindre le service de recherche.</string>
+    <string name="search_add">Ajouter à ma liste</string>
+    <string name="search_added">Ajouté</string>
+    <string name="search_open_watchlist">Ma liste</string>
+
+    <!-- Catalogue TMDB : watchlist -->
+    <string name="watchlist_title">Ma liste à regarder</string>
+    <string name="watchlist_empty">Ta liste est vide. Ajoute des films depuis la recherche.</string>
+    <string name="watchlist_error">Impossible de charger ta liste.</string>
+    <string name="watchlist_available">Disponible</string>
+    <string name="watchlist_unavailable">Pas encore dispo</string>
 </resources>

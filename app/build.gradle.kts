@@ -68,6 +68,9 @@ dependencies {
     // Synchro temps réel (Laravel Reverb) — WebSocket OkHttp, branchée aux étapes 3-4.
     implementation(libs.okhttp)
 
+    // Affiches TMDB (catalogue / watchlist) — chargement d'images async en Compose.
+    implementation(libs.coil.compose)
+
     testImplementation(libs.junit)
 
     debugImplementation(libs.androidx.ui.tooling)

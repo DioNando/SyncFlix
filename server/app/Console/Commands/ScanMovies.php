@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Movie;
+use App\Models\WatchSession;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -66,6 +67,11 @@ class ScanMovies extends Command
             ];
         }
 
+        // Liens « propres » id.ext servis par Caddy (URL sans caractères spéciaux → fini les 404
+        // sur les crochets/parenthèses des noms de release).
+        $disk->makeDirectory('media');
+        $validLinks = [];
+
         $seen = [];
         $count = 0;
         foreach ($files as $file) {
@@ -78,28 +84,61 @@ class ScanMovies extends Command
             $title = $this->prettyTitle($base);
             $subtitles = $subtitlesByBase[$base] ?? [];
 
-            Movie::updateOrCreate(
+            $movie = Movie::updateOrCreate(
                 ['path' => $file],
                 ['title' => $title, 'subtitles' => $subtitles],
             );
             $seen[] = $file;
             $count++;
+
+            $linkName = "media/{$movie->id}.{$ext}";
+            $this->ensureMediaLink($disk, $file, $linkName);
+            $validLinks[] = "{$movie->id}.{$ext}";
+
             $this->line("  ✓ {$title}".(count($subtitles) ? ' ('.count($subtitles).' sous-titre(s))' : ''));
         }
 
-        // Purge les films dont le fichier a disparu — MAIS seulement si on a bien vu des vidéos
-        // (sinon un dossier vide/mal configuré viderait toute la bibliothèque) et uniquement ceux
-        // qu'aucune session ne référence (sinon la clé étrangère RESTRICT ferait échouer le delete).
+        // Purge les liens devenus orphelins (films retirés / renommés).
+        foreach ($disk->files('media') as $link) {
+            if (! in_array(basename($link), $validLinks, true)) {
+                $disk->delete($link);
+            }
+        }
+
+        // Purge les films dont le fichier a disparu — seulement si on a bien vu des vidéos (sinon un
+        // dossier vide/mal configuré viderait toute la bibliothèque). Les sessions qui référencent ces
+        // films sont devenues caduques → on les supprime D'ABORD (sinon la clé étrangère RESTRICT
+        // empêcherait la suppression du film, et le film resterait visible dans la liste).
         $removed = 0;
         if (! empty($seen)) {
-            $removed = Movie::whereNotIn('path', $seen)
-                ->whereDoesntHave('watchSessions')
-                ->delete();
+            $staleIds = Movie::whereNotIn('path', $seen)->pluck('id');
+            if ($staleIds->isNotEmpty()) {
+                WatchSession::whereIn('movie_id', $staleIds)->delete();
+                $removed = Movie::whereIn('id', $staleIds)->delete();
+            }
         }
 
         $this->info("Scan terminé : {$count} film(s) indexé(s)".($removed ? ", {$removed} retiré(s)." : '.'));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Crée (si absent) un lien `media/{id}.{ext}` vers le vrai fichier vidéo, pour que Caddy serve
+     * via une URL sans caractères spéciaux. Hardlink d'abord (NTFS/ext4, sans privilège) ; repli
+     * symlink ; sinon avertissement (le film basculera sur le streaming PHP de secours).
+     */
+    private function ensureMediaLink($disk, string $file, string $linkRel): void
+    {
+        $linkAbs = $disk->path($linkRel);
+        if (file_exists($linkAbs)) {
+            return;
+        }
+        $targetAbs = $disk->path($file);
+        if (@link($targetAbs, $linkAbs) || @symlink($targetAbs, $linkAbs)) {
+            return;
+        }
+        $this->warn("  ⚠ Lien /media impossible pour {$file} → repli streaming PHP (mono-thread).");
     }
 
     /**

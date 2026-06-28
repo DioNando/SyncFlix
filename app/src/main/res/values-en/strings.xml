@@ -16,6 +16,7 @@
     <string name="settings_section_player">Player</string>
     <string name="settings_show_title">Show movie title</string>
     <string name="settings_show_reactions">Show reactions</string>
+    <string name="settings_show_debug">Show drift (debug)</string>
     <string name="settings_section_reactions">Reactions</string>
     <string name="settings_reactions_label">Your emojis (one per box, max 6)</string>
     <string name="settings_reactions_reset">Reset</string>
@@ -41,6 +42,7 @@
     <!-- Waiting room -->
     <string name="lobby_title">Waiting room</string>
     <string name="lobby_hint">Share this code with the other person to watch together.</string>
+    <string name="lobby_hint_named">Share this code with %1$s to watch together.</string>
     <string name="lobby_waiting">Waiting for your partner… (%1$d/2)</string>
     <string name="lobby_waiting_named">Waiting for %1$s… (%2$d/2)</string>
     <string name="lobby_enter_alone">Enter alone</string>
@@ -58,6 +60,16 @@
     <string name="player_quit_title">Leave the session?</string>
     <string name="player_quit_message">You\'re about to leave the shared session.</string>
     <string name="player_quit_confirm">Leave</string>
+    <string name="player_reconnecting">Connection lost, reconnecting…</string>
+    <string name="player_error_codec">This device can\'t play this video format (e.g. 10-bit HEVC). Try another file, or re-encode it to 8-bit H.264.</string>
+    <string name="player_error_network">Couldn\'t load the stream. Check the connection to the server.</string>
+    <string name="player_partner_connected">Partner connected</string>
+    <string name="player_partner_disconnected">Partner disconnected</string>
+    <string name="player_partner_gone">Your partner disconnected</string>
+    <string name="player_partner_gone_named">%1$s disconnected</string>
+    <string name="player_partner_back">Your partner is back</string>
+    <string name="player_partner_back_named">%1$s is back</string>
+    <string name="player_drift">Δ %1$d ms</string>
 
     <!-- Accessibility descriptions (TalkBack) -->
     <string name="cd_back">Back</string>
@@ -71,4 +83,22 @@
     <string name="cd_lock">Lock screen</string>
     <string name="cd_unlock">Unlock screen</string>
     <string name="cd_share">Share the code</string>
+    <string name="cd_remove">Remove from list</string>
+
+    <!-- TMDB catalog: movie search -->
+    <string name="search_title">Search for a movie</string>
+    <string name="search_field_label">Movie title</string>
+    <string name="search_hint">Search for a movie to see its details and add it to your list.</string>
+    <string name="search_empty">No results for this search.</string>
+    <string name="search_error">Unable to reach the search service.</string>
+    <string name="search_add">Add to my list</string>
+    <string name="search_added">Added</string>
+    <string name="search_open_watchlist">My list</string>
+
+    <!-- TMDB catalog: watchlist -->
+    <string name="watchlist_title">My watchlist</string>
+    <string name="watchlist_empty">Your list is empty. Add movies from search.</string>
+    <string name="watchlist_error">Unable to load your list.</string>
+    <string name="watchlist_available">Available</string>
+    <string name="watchlist_unavailable">Not available yet</string>
 </resources>

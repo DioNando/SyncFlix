@@ -10,6 +10,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.syncflix.app.data.model.SessionState
+import com.syncflix.app.ui.catalog.SearchScreen
+import com.syncflix.app.ui.catalog.WatchlistScreen
 import com.syncflix.app.ui.pairing.MoviePickerScreen
 import com.syncflix.app.ui.pairing.PairingScreen
 import com.syncflix.app.ui.player.PlayerScreen
@@ -20,6 +22,8 @@ private object Routes {
     const val MOVIES = "movies"
     const val PLAYER = "player"
     const val SETTINGS = "settings"
+    const val SEARCH = "search"
+    const val WATCHLIST = "watchlist"
 }
 
 /**
@@ -48,10 +52,27 @@ fun SyncFlixNavHost() {
                     navController.navigate(Routes.MOVIES)
                 },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenSearch = { server ->
+                    pendingServer = server
+                    navController.navigate(Routes.SEARCH)
+                },
             )
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.SEARCH) {
+            SearchScreen(
+                server = pendingServer,
+                onOpenWatchlist = { navController.navigate(Routes.WATCHLIST) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.WATCHLIST) {
+            WatchlistScreen(
+                server = pendingServer,
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(Routes.MOVIES) {
             MoviePickerScreen(

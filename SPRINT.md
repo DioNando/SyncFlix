@@ -52,11 +52,12 @@ fonctionne. Reste : du confort/UX et les fonctionnalités futures (TMDB, voice c
 - [ ] (Optionnel) **Mesurer le Δt** réel (< 200 ms) et affiner les seuils si la synchro doit être plus serrée.
 
 ### 🟡 Confort
-- [ ] Gestion d'erreurs réseau plus fine côté UI (serveur injoignable en cours de session).
+- [x] **Overlay de dérive (debug)** ✅ — `PlaybackSyncManager.onDrift` → état dans PlayerScreen, affiché « Δ X ms » si réglage `showDebug` activé.
+- [x] **Bannière « connexion perdue, reconnexion… »** ✅ — affichée quand le statut WS passe Offline (reconnexion auto déjà en place).
 - [ ] (Optionnel) Nettoyer les chaînes a11y inutilisées (`cd_play`/`cd_pause`/`cd_seek_*`).
 
-### 🔵 Fonctionnalités futures (conçues, non codées — cf. `CONCEPTION.md`, toutes deux gratuites)
-- [ ] **TMDB + watchlist + synopsis** (recommandé en premier).
+### 🔵 Fonctionnalités futures (cf. `CONCEPTION.md`)
+- [x] **TMDB + watchlist + synopsis** ✅ — **backend** (config `services.tmdb` + repli CA bundle, table `wishlist_items`, `CatalogController` proxy search/détail + CRUD watchlist, routes) **et UI Android** (Coil ; `Catalog.kt`/`CatalogApi.kt`, `SearchScreen` recherche debounce + grille + fiche bottom-sheet « Ajouter », `WatchlistScreen` liste + badge disponibilité + « vu »/retrait ; nav `search`/`watchlist`, accès depuis l'icône loupe de l'appairage). Prérequis serveur : `TMDB_TOKEN` dans `.env` + `php artisan migrate` + `php artisan config:clear`.
 - [ ] **Voice chat** WebRTC + **push-to-talk** (Tailscale → P2P direct, pas de TURN).
 
 ---
@@ -99,3 +100,5 @@ composer dev
 | 2026-06-27 | **Lecteur** : essai Compose custom **abandonné** → **natif** ; vitesse masquée (`ForwardingPlayer`), **TextureView** (fin du flash noir). Salon 2 colonnes + **partager** ; fix orientation (taille fenêtre). |
 | 2026-06-27 | Quick-win : voile de chargement sur le picker. Revue de cohérence (compile-safe). Doc `CONCEPTION.md` (TMDB + voice PTT). |
 | 2026-06-27 | 🎉 **MVP validé sur 2 téléphones réels via Tailscale** : visionnage synchrone à deux fonctionnel bout-en-bout. |
+| 2026-06-28 | **TMDB de bout en bout** : backend proxy (search/détail + CRUD watchlist, repli CA bundle SSL Windows) + **UI Android** (Coil, recherche debounce → grille d'affiches → fiche « Ajouter », watchlist avec badge disponibilité/« vu »/retrait, nav + accès loupe à l'appairage). |
+| 2026-06-28 | **Retours d'usage** : (1) vidéos à crochets/parenthèses en **404 Caddy** → `movies:scan` crée des **liens `media/{id}.{ext}`**, Caddy sert depuis `media/` (URL sans caractères spéciaux). (2) **Indicateur de présence du partenaire** (icône bandeau + notice « X déconnecté·e / de retour ») + **ping WS 20 s** (moins de « kick »). (3) **Purge du scan corrigée** : supprime les sessions caduques puis les films retirés du dossier. |

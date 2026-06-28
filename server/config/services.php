@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    // TMDB : recherche de films + watchlist (cf. CatalogController). Token v4 « read access »
+    // (Bearer), à mettre dans .env : TMDB_TOKEN=eyJhbGciOi...
+    'tmdb' => [
+        'token' => env('TMDB_TOKEN'),
+        // Optionnel (Windows) : chemin vers un bundle CA si PHP n'en a pas de configuré dans php.ini
+        // → corrige « cURL error 60: SSL certificate problem ». Ex. TMDB_CA_BUNDLE="C:\php\extras\ssl\cacert.pem".
+        'ca_bundle' => env('TMDB_CA_BUNDLE'),
+    ],
+
 ];

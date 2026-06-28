@@ -35,6 +35,8 @@ class PlaybackSyncManager(
     private val clockOffset: () -> Long,
     private val onEmit: suspend (isPlaying: Boolean, positionMs: Long) -> Unit,
     private val onRemoteApplied: (VideoState) -> Unit = {},
+    // Dérive estimée (ms, signée : >0 = on est en retard sur la position attendue) — debug/diagnostic.
+    private val onDrift: (Long) -> Unit = {},
 ) {
     private var lastAppliedSeq = -1L
     private var lastRemote: VideoState? = null
@@ -132,9 +134,11 @@ class PlaybackSyncManager(
         val state = lastRemote
         if (state == null || !state.isPlaying || !player.playWhenReady) {
             setSpeed(1f)  // en pause / pas d'état distant : pas de correction
+            onDrift(0L)
             return
         }
         val diff = targetPosition(state) - player.currentPosition  // >0 : on est en retard
+        onDrift(diff)
         val gap = abs(diff)
         when {
             gap > BIG_SEEK_MS -> { setSpeed(1f); hardSeek(targetPosition(state)) }

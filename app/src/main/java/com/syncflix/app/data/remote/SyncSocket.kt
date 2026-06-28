@@ -10,6 +10,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 /**
  * Client WebSocket de synchro, parlant le **protocole Pusher** (implémenté par Laravel Reverb).
@@ -33,7 +34,7 @@ class SyncSocket(
     private val scope: CoroutineScope,
     // Signe l'abonnement : (socketId, channel) → auth + channel_data. Cf. SessionApi.authChannel.
     private val authorize: suspend (socketId: String, channel: String) -> ChannelAuth,
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = defaultClient(),
 ) {
     /** Événements remontés à l'UI / au gestionnaire de synchro. */
     sealed interface Event {
@@ -179,5 +180,14 @@ class SyncSocket(
 
     companion object {
         private const val RECONNECT_DELAY_MS = 2000L
+
+        /**
+         * Client par défaut avec **ping WebSocket automatique** (20 s) : maintient la connexion
+         * ouverte à travers les NAT/proxies (Tailscale, mobile) et détecte vite une connexion morte
+         * → reconnexion rapide. Réduit les déconnexions silencieuses (« kick »).
+         */
+        private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
     }
 }

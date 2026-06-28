@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\MovieController;
 use App\Http\Controllers\SessionController;
 use App\Http\Controllers\StreamController;
@@ -34,3 +35,11 @@ Route::post('/sessions/{code}/join', [SessionController::class, 'join']);    // 
 Route::get('/sessions/{code}/state', [SessionController::class, 'show']);    // état courant (resync)
 Route::post('/sessions/{code}/state', [SessionController::class, 'update']); // maj Play/Pause/Seek
 Route::post('/sessions/{code}/reaction', [SessionController::class, 'react']); // réaction emoji
+
+// Catalogue TMDB (recherche) + watchlist « à regarder plus tard ».
+Route::get('/search', [CatalogController::class, 'search']);
+Route::get('/movies-meta/{tmdbId}', [CatalogController::class, 'detail'])->whereNumber('tmdbId');
+Route::get('/wishlist', [CatalogController::class, 'wishlist']);
+Route::post('/wishlist', [CatalogController::class, 'store']);
+Route::patch('/wishlist/{wishlistItem}', [CatalogController::class, 'update'])->whereNumber('wishlistItem');
+Route::delete('/wishlist/{wishlistItem}', [CatalogController::class, 'destroy'])->whereNumber('wishlistItem');
